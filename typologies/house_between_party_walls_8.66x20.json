@@ -1,0 +1,67 @@
+{
+  "id": "house_between_party_walls_8.66x20",
+  "version": 1,
+  "name": "House between party walls — 8.66 x 20.00 m lot",
+  "description": "One floor. Living-dining-kitchen at the front, a service band in the middle, and two bedrooms at the rear. Front setback and rear garden.",
+  "lot": {
+    "front_m": 8.66,
+    "depth_m": 20.0,
+    "area_m2": 173.2,
+    "party_walls": true,
+    "corner": false
+  },
+  "layout": {
+    "front_setback_m": 3.1,
+    "rear_setback_m": 4.1,
+    "usable_width_m": 8.36,
+    "usable_depth_m": 12.9,
+    "estimated_footprint_m2": 112.6,
+    "estimated_fos": 0.65,
+    "estimated_fot": 0.65,
+    "note": "FOS/FOT are seed estimates, not code values. Verify with the CABA Urban Code and the actual parcel."
+  },
+  "floors": 1,
+  "program": {
+    "bedrooms": 2,
+    "bathrooms": 1,
+    "powder_rooms": 1,
+    "integrated_kitchen": true,
+    "laundry": true,
+    "storage": true,
+    "garage": false,
+    "target_covered_area_m2": [75, 85]
+  },
+  "seed_rooms": [
+    { "name": "LIVING-DINING-KITCHEN", "type": "living", "area_m2": 29.74, "min_side_m": 2.8 },
+    { "name": "BEDROOM 1", "type": "bedroom", "area_m2": 12.88, "min_side_m": 2.5 },
+    { "name": "BEDROOM 2", "type": "bedroom", "area_m2": 9.97, "min_side_m": 2.5 },
+    { "name": "BATHROOM", "type": "bathroom", "area_m2": 4.92, "min_side_m": 1.5 },
+    { "name": "POWDER ROOM", "type": "bathroom_3", "area_m2": 2.95, "min_side_m": 0.9 },
+    { "name": "LAUNDRY", "type": "laundry", "area_m2": 2.95, "min_side_m": 1.2 },
+    { "name": "CORRIDOR", "type": "corridor", "area_m2": 6.49, "min_side_m": 1.0 },
+    { "name": "HALL", "type": "corridor", "area_m2": 6.61, "min_side_m": 1.0 },
+    { "name": "STORAGE", "type": "storage", "area_m2": 1.04, "min_side_m": 0.6 }
+  ],
+  "defaults": {
+    "clear_height_m": 2.6,
+    "exterior_wall_m": 0.2,
+    "interior_wall_m": 0.1,
+    "entrance_door_m": 0.9,
+    "interior_door_m": 0.8,
+    "window_height_m": 1.4,
+    "sill_m": 0.9
+  },
+  "seed": {
+    "specs": ["typologies/seeds/house_8.66x20.json"],
+    "result": { "ok": true, "area_m2": 77.55, "rooms": 9 }
+  },
+  "rules": ["caba_rules.json"],
+  "outputs": ["plan"],
+  "notes": [
+    "The living-dining-kitchen occupies the full front; the middle band holds the bathroom, powder room, laundry, and storage.",
+    "The bedrooms are at the rear, with windows to the garden.",
+    "Keep the corridor >= 1.00 m (0.95 m is allowed on lots with frontage <= 8.66 m).",
+    "The seed already passes check.py: use it as a starting point and adapt the program to the brief.",
+    "This typology is Level 1 (floor plan). It does not imply a sheet set."
+  ]
+}

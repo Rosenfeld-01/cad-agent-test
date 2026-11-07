@@ -1,110 +1,124 @@
-# cad-agent — framework para generar planos de vivienda con CADCraft
+# cad-agent — deterministic housing-plan pipeline for CADCraft
 
-Pipeline determinístico que convierte un **brief** en un **plano de vivienda
-validado**. La fuente de verdad es un `spec` JSON; el DXF se **genera**, nunca
-se edita a mano.
+A deterministic pipeline that turns a **brief** into a **validated housing plan**.
+The source of truth is a JSON `spec`; the DXF is **generated**, never edited by
+hand.
 
 ```
 brief.json ─▶ new_case.py ─▶ spec.json ─▶ validate_spec.py ─▶ plan.py ─▶ check.py ─▶ out/*.dxf
 ```
 
-Si algo está mal, se corrige el `spec` y se regenera. Editar el DXF a mano rompe
-la trazabilidad y el validador deja de tener sentido.
+If something is wrong, fix the `spec` and regenerate. Editing the DXF by hand
+breaks traceability and makes the validator meaningless.
 
-- **Nivel 1 (barato):** planta de una vivienda → DXF + reporte + PNG/DWG/PDF si
-  está `cadcraft-cli`.
-- **Nivel 2 (caro):** juego de láminas A2. El código de referencia vive en
-  `examples/nivel2/`; se produce **sólo** tras aprobar la planta.
+- **Level 1 (cheap):** one housing floor plan → DXF + report + PNG/DWG/PDF when
+  `cadcraft-cli` is available.
+- **Level 2 (expensive):** a set of A2 sheets. The reusable toolkit is
+  `sheet_lib.py` plus `CAD_Blocks/`; the original case-specific generator is not
+  shipped here. Build a project-specific `sheets.py` from the toolkit when
+  Level 2 is approved.
 
-## Requisitos
+## Requirements
 
-- Python 3.10+ con `ezdxf` y `matplotlib`.
-- Opcional: `cadcraft-cli` en `PATH` para exportar PNG/DWG/PDF (ver
+- Python 3.10+ with `ezdxf` and `matplotlib`.
+- Optional: `cadcraft-cli` in `PATH` to export PNG/DWG/PDF (see
   `mcp-cline.json` / `mcp-opencode.json`).
 
-## Arranque rápido (Nivel 1)
+## Quick start (Level 1)
 
 ```bash
-# Validar y generar la planta de la semilla incluida
-python3 tools/validate_spec.py typologies/semillas/casa_8.66x20.json
-./run.sh typologies/semillas/casa_8.66x20.json out/semilla
+# Validate and generate the included seed plan
+python3 tools/validate_spec.py typologies/seeds/house_8.66x20.json
+./run.sh typologies/seeds/house_8.66x20.json out/seed
 ```
 
-El reporte queda en `out/semilla/*.report.json`. Con `"ok": true` el plano está
-limpio; si hay errores, se corrige el spec y se vuelve a correr (**máximo 10
-iteraciones**; si no converge, parar y explicar).
+The report is written to `out/seed/*.report.json`. With `"ok": true` the plan is
+clean; if there are errors, fix the spec and run again (**maximum 10
+iterations**; if it does not converge, stop and explain).
 
-## Crear un caso nuevo
+## Create a new case
 
 ```bash
-cp briefs/_plantilla/brief.json briefs/<slug>.json      # completar el brief
+cp briefs/_template.json briefs/<slug>.json      # complete the brief
 python3 tools/new_case.py --brief briefs/<slug>.json \
-  --typology typologies/casa_entre_medianeras_8.66x20.json --slug <slug>
-python3 tools/validate_spec.py casos/<slug>/spec.json
-./run.sh casos/<slug>/spec.json out/<slug>
+  --typology typologies/house_between_party_walls_8.66x20.json --slug <slug>
+python3 tools/validate_spec.py cases/<slug>/spec.json
+./run.sh cases/<slug>/spec.json out/<slug>
 ```
 
-`new_case.py` copia el spec semilla de la tipología y deja `brief.json`,
-`case.json` (estado `borrador`) y `decisiones.md`.
+`new_case.py` copies the typology seed spec and creates `brief.json`,
+`case.json` (status `draft`), and `decisions.md`.
 
-## Estructura
+## Layout
 
-| Ruta | Para qué |
+| Path | Purpose |
 |---|---|
-| `plan.py` | Genera el DXF desde el spec (paramétrico, unidades en metros). |
-| `check.py` | Valida el DXF contra el spec y `rules_caba.json`; emite el reporte. |
-| `run.sh` | Pipeline completo: validar → generar → validar → PNG/DWG/PDF. |
-| `rules_caba.json` | Valores de partida (no asesoramiento legal). |
-| `MEDIDAS_CABA.md` | Medidas de práctica y mínimos. |
-| `schemas/spec.schema.json` | Contrato del spec. |
-| `tools/validate_spec.py` | Preflight barato del spec. |
-| `tools/new_case.py` | Crea un caso desde brief + tipología. |
-| `tools/usage.py` | Costo, llamadas y cache por proyecto. |
-| `tools/qa_laminas.py`, `tools/qa_geometria.py` | Gates del juego de láminas (Nivel 2). |
-| `tools/qa_muros.py` | Chequeo de espesores/continuidad de muros. |
-| `typologies/` | Soluciones reutilizables + spec semilla (`semillas/`). |
-| `briefs/` | Entradas de proyecto (`_plantilla/brief.json`). |
-| `casos/` | Proyectos concretos: spec, decisiones y métricas. |
-| `planos_lib.py` | Primitivas de lámina (marco, escalas, bloques) para Nivel 2. |
-| `blocks_*.py` | Datos y builder de la biblioteca `CAD_Blocks/` (los usa `planos_lib`). |
-| `examples/nivel2/` | Ejemplo autocontenido del juego de láminas. |
-| `CAD_Blocks/` | Biblioteca de bloques cadastrados (mobiliario, artefactos, instalaciones). |
-| `tests/` | Autotest de gates (`mk_dxf_roto.py` + `test_gates.sh`). |
-| `docs/` | `ESCALADO.md` (método y costos) y `DEFECTOS_CONOCIDOS.md`. |
-| `PLAYBOOK.md` | Memoria técnica del Nivel 2 (gates, convenciones, protocolo de bajo costo). |
-| `AGENTS.md` | Cómo trabaja el agente. |
+| `plan.py` | Generate the DXF from the spec (parametric, units in meters). |
+| `check.py` | Validate the DXF against the spec and `caba_rules.json`; write the report. |
+| `run.sh` | Full pipeline: validate → generate → validate → PNG/DWG/PDF. |
+| `caba_rules.json` | Starting values (not legal advice). |
+| `docs/CABA_RULES.md` | Practice dimensions and CABA minimums. |
+| `schemas/spec.schema.json` | Spec contract. |
+| `tools/validate_spec.py` | Cheap spec preflight. |
+| `tools/new_case.py` | Create a case from a brief + typology. |
+| `tools/usage.py` | Cost, calls, and cache per project. |
+| `tools/qa_sheets.py` | Level 2 gate: text overlaps, out-of-sheet geometry, DXF audit. |
+| `tools/qa_geometry.py` | Level 2 gate: duplicate lines, overlapping blocks, door clearance. |
+| `tools/qa_walls.py` | Wall-thickness/overlap gate for `A-WALL`. |
+| `typologies/` | Reusable solutions + seed specs (`seeds/`). |
+| `briefs/` | Project inputs (`_template.json`). |
+| `cases/` | Concrete projects: spec, decisions, and metrics. |
+| `sheet_lib.py` | Sheet primitives (frame, title block, scales, blocks) for Level 2. |
+| `blocks_*.py` | Data and builder for the `CAD_Blocks/` library (used by `sheet_lib`). |
+| `CAD_Blocks/` | Registered block library (furniture, fixtures, services). |
+| `tests/` | Gate self-test (`make_broken_dxf.py` + `test_gates.sh`). |
+| `PLAYBOOK.md` | Technical method: gates, conventions, low-cost protocol. |
+| `AGENTS.md` | How the agent works. |
 
-## Convenciones
+## Conventions
 
-- Unidades: **metros** (1 unidad = 1 m). `$INSUNITS = 6`.
-- Capas: `A-WALL`, `A-DOOR`, `A-WIN`, `A-AREA`, `A-ANNO`, `A-DIM`, `A-AXIS`
-  (Nivel 2 agrega `A-MOB`, `A-HATCH`, `X-FRAME`, `I-ELE`, `I-SAN`, `I-GAS`).
-- Altura de texto mínima: 0,15 m. Cotas en metros con dos decimales.
+- Units: **meters** (1 unit = 1 m). `$INSUNITS = 6`.
+- Layers: `A-WALL`, `A-DOOR`, `A-WIN`, `A-AREA`, `A-ANNO`, `A-DIM`, `A-AXIS`
+  (Level 2 adds `A-MOB`, `A-HATCH`, `X-FRAME`, `I-ELE`, `I-SAN`, `I-GAS`).
+- Minimum text height: 0.15 m. Dimensions in meters with two decimals.
+- JSON spec keys and CAD layer/block codes are stable API identifiers. Documents,
+  comments, messages, and folder names are in English.
 
-## Nivel 2 (ejemplo de referencia)
+## Level 2 toolkit
+
+Level 2 is a library, not a generic generator. Use `sheet_lib.py` to compose
+sheets and the gates to verify them:
 
 ```bash
-cd examples/nivel2
-python3 planos.py L07                       # construir sólo una hoja
-python3 ../../tools/qa_laminas.py out/L07.dxf
-python3 ../../tools/qa_geometria.py out/L07.dxf
+python3 tools/qa_sheets.py --all out
+python3 tools/qa_geometry.py --all out
+python3 tools/qa_walls.py --all out        # plan sheets only
 ```
 
-`planos.py` está hecho para un caso concreto: es una **plantilla** para copiar y
-adaptar a un proyecto nuevo, no un generador genérico. Generalizarlo es el
-próximo salto de escala (ver `docs/ESCALADO.md` §8).
+The original case-specific sheet generator is preserved in the larger
+`cad-agent` archive, outside this clean repository. Generalizing it is the next
+scale-up step (see `PLAYBOOK.md`).
 
-## Normativa
+## Normative rules
 
-`rules_caba.json` son **valores de partida**, no asesoramiento legal. Antes de
-entregar, verificar cada valor contra el Código de Edificación (Ley 6100) y el
-Código Urbanístico (Ley 6099) de CABA, o la normativa del municipio. FOS/FOT y
-retiros dependen de la parcela: se declaran y se verifican, no se inventan. El
-plano lo revisa y firma un profesional matriculado.
+`caba_rules.json` contains **starting values**, not legal advice. Before
+delivery, verify each value against the CABA Building Code (Law 6100) and the
+Urban Code (Law 6099), or the local municipality. FOS/FOT and setbacks depend on
+the parcel: declare and verify them, never invent them. A licensed professional
+reviews and signs the plan.
 
-## Costo
+## Cost
 
 ```bash
 python3 tools/usage.py --project cad-agent
 python3 tools/usage.py --project cad-agent --max-cost 1.00 --max-calls 1500
 ```
+
+## Tests
+
+```bash
+bash tests/test_gates.sh
+```
+
+The self-test creates a deliberately broken DXF and verifies that both Level 2
+gates reject it. A gate that does not fail is broken.

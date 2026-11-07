@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-check.py — validador determinístico del plano.
+check.py — deterministic plan validator.
 
-Esto es la "conciencia de errores" del agente: NO es el LLM. Es código que
-revisa el DXF contra el spec y contra las reglas de rules_caba.json.
+This is the agent's "error conscience": it is NOT the LLM. It is code that
+checks the DXF against the spec and against the rules in `caba_rules.json`.
 
-Calcula la iluminación y ventilación de cada ambiente desde la GEOMETRÍA REAL
-de las ventanas del spec (no confía en un número declarado a mano).
+It calculates lighting and ventilation for each room from the REAL GEOMETRY of
+the windows in the spec (it does not trust a hand-declared number).
 
-Salida: reporte legible + report.json. Exit code 1 si hay errores.
+Output: readable report + report.json. Exit code 1 if there are errors.
 
-Uso:
-    python3 check.py out/planta.dxf typologies/semillas/casa_8.66x20.json [rules_caba.json]
+Usage:
+    python3 check.py out/plan.dxf typologies/seeds/house_8.66x20.json [caba_rules.json]
 """
 from __future__ import annotations
 
@@ -33,9 +33,9 @@ def _shoelace(pts):
     return abs(s) / 2.0
 
 
-def _rect(amb):
-    x, y = float(amb["x"]), float(amb["y"])
-    return x, y, x + float(amb["w"]), y + float(amb["h"])
+def _rect(room):
+    x, y = float(room["x"]), float(room["y"])
+    return x, y, x + float(room["w"]), y + float(room["h"])
 
 
 def _point_in(px, py, rect, margin):
@@ -44,32 +44,32 @@ def _point_in(px, py, rect, margin):
 
 
 def _window_area_by_room(spec, warnings):
-    """Suma la superficie de ventanas de cada ambiente, ubicando el punto medio
-    de cada ventana en el rectángulo del ambiente más cercano."""
-    ambs = spec.get("ambientes", [])
-    areas = {a["nombre"]: 0.0 for a in ambs}
-    for w in spec["muros"]:
+    """Sum window area per room by placing each window midpoint in the nearest
+    room rectangle."""
+    rooms = spec.get("rooms", [])
+    areas = {room["name"]: 0.0 for room in rooms}
+    for w in spec["walls"]:
         p1, p2 = w["p1"], w["p2"]
         dx, dy = p2[0] - p1[0], p2[1] - p1[1]
         length = math.hypot(dx, dy)
         if length < 1e-9:
             continue
         ux, uy = dx / length, dy / length
-        for o in w.get("aberturas", []):
-            if o.get("tipo") != "ventana":
+        for o in w.get("openings", []):
+            if o.get("type") != "window":
                 continue
             s = float(o["s"])
             px, py = p1[0] + ux * s, p1[1] + uy * s
-            cand = [a for a in ambs if _point_in(px, py, _rect(a), 0.30)]
-            if not cand:
+            candidates = [r for r in rooms if _point_in(px, py, _rect(r), 0.30)]
+            if not candidates:
                 warnings.append({
                     "code": "WINDOW_ORPHAN",
-                    "msg": f"ventana {o.get('id', '?')} no cae en ningún ambiente",
+                    "msg": f"window {o.get('id', '?')} does not fall in any room",
                 })
                 continue
-            cand.sort(key=lambda a: float(a["w"]) * float(a["h"]))
-            room = cand[0]
-            areas[room["nombre"]] += float(o["ancho"]) * float(o.get("alto", 1.4))
+            candidates.sort(key=lambda r: float(r["w"]) * float(r["h"]))
+            room = candidates[0]
+            areas[room["name"]] += float(o["width"]) * float(o.get("height", 1.4))
     return areas
 
 
@@ -84,21 +84,21 @@ def check(dxf_path: Path, spec: dict, rules: dict) -> dict:
     def warn(code, msg, **kw):
         warnings.append({"code": code, "msg": msg, **kw})
 
-    # --- capas mínimas ---
+    # --- required layers ---
     for name in ["A-WALL", "A-DOOR", "A-WIN", "A-AREA", "A-ANNO"]:
         if name not in doc.layers:
-            err("LAYER_MISSING", f"falta la capa {name}", layer=name)
+            err("LAYER_MISSING", f"missing layer {name}", layer=name)
 
-    # --- polilíneas cerradas ---
+    # --- closed polylines ---
     polylines = list(msp.query("LWPOLYLINE"))
     if not polylines:
-        err("NO_WALLS", "el plano no tiene polilíneas (¿muros?)")
+        err("NO_WALLS", "the plan has no polylines (walls?)")
     for pl in polylines:
         if not pl.closed:
-            err("POLYLINE_OPEN", f"polilínea abierta en capa {pl.dxf.layer}",
+            err("POLYLINE_OPEN", f"open polyline on layer {pl.dxf.layer}",
                 layer=pl.dxf.layer, handle=pl.dxf.handle)
 
-    # --- ambientes: DXF vs spec ---
+    # --- rooms: DXF vs spec ---
     dxf_rooms = {}
     for pl in polylines:
         if pl.dxf.layer != "A-AREA":
@@ -112,120 +112,120 @@ def check(dxf_path: Path, spec: dict, rules: dict) -> dict:
             pass
         pts = [(p[0], p[1]) for p in pl.get_points("xy")]
         if name is None:
-            warn("ROOM_UNNAMED", "polígono de ambiente sin nombre en XDATA")
+            warn("ROOM_UNNAMED", "room polygon without a name in XDATA")
             continue
         dxf_rooms[name] = _shoelace(pts)
 
     win_area = _window_area_by_room(spec, warnings)
-    amb_rules = rules["ambientes"]
-    sin_vent = set(rules.get("sin_ventilacion", []))
+    room_rules = rules["rooms"]
+    no_ventilation = set(rules.get("no_ventilation", []))
 
-    for amb in spec.get("ambientes", []):
-        name, kind = amb["nombre"], amb["tipo"]
-        w, h = float(amb["w"]), float(amb["h"])
+    for room in spec.get("rooms", []):
+        name, kind = room["name"], room["type"]
+        w, h = float(room["w"]), float(room["h"])
         area_spec = w * h
         side_min = min(w, h)
 
         if name not in dxf_rooms:
-            err("ROOM_MISSING", f"ambiente {name} no está en el DXF", ambiente=name)
+            err("ROOM_MISSING", f"room {name} is not in the DXF", room=name)
             continue
         if abs(dxf_rooms[name] - area_spec) > TOL:
             err("AREA_MISMATCH",
                 f"{name}: DXF {dxf_rooms[name]:.2f} m2 vs spec {area_spec:.2f} m2",
-                ambiente=name)
+                room=name)
 
-        r = amb_rules.get(kind)
+        r = room_rules.get(kind)
         if r is None:
-            warn("ROOM_KIND_UNKNOWN", f"{name}: tipo '{kind}' sin regla", ambiente=name)
+            warn("ROOM_KIND_UNKNOWN", f"{name}: type '{kind}' has no rule", room=name)
             continue
-        if area_spec + 1e-9 < r["area_min"]:
+        if area_spec + 1e-9 < r["min_area"]:
             err("ROOM_TOO_SMALL",
-                f"{name}: {area_spec:.2f} m2 < mínimo {r['area_min']} m2",
-                ambiente=name)
-        if side_min + 1e-9 < r["lado_min"]:
+                f"{name}: {area_spec:.2f} m2 < minimum {r['min_area']} m2",
+                room=name)
+        if side_min + 1e-9 < r["min_side"]:
             err("ROOM_SIDE_TOO_SMALL",
-                f"{name}: lado {side_min:.2f} m < mínimo {r['lado_min']} m",
-                ambiente=name)
+                f"{name}: side {side_min:.2f} m < minimum {r['min_side']} m",
+                room=name)
 
-        # iluminación y ventilación calculadas desde la geometría
-        if kind not in sin_vent:
+        # lighting and ventilation calculated from geometry
+        if kind not in no_ventilation:
             wa = win_area.get(name, 0.0)
-            need_i = area_spec * rules["iluminacion"]["factor"]
-            need_v = area_spec * rules["ventilacion"]["factor"]
+            need_i = area_spec * rules["lighting"]["factor"]
+            need_v = area_spec * rules["ventilation"]["factor"]
             if wa + 1e-9 < need_i:
                 err("LIGHTING",
-                    f"{name}: ventanas {wa:.2f} m2 < iluminación {need_i:.2f} m2 "
-                    f"(20% de {area_spec:.2f})", ambiente=name)
+                    f"{name}: windows {wa:.2f} m2 < lighting {need_i:.2f} m2 "
+                    f"(20% of {area_spec:.2f})", room=name)
             if wa + 1e-9 < need_v:
                 err("VENTILATION",
-                    f"{name}: ventanas {wa:.2f} m2 < ventilación {need_v:.2f} m2 "
-                    f"(5% de {area_spec:.2f})", ambiente=name)
-            declared = amb.get("ventilacion_m2")
+                    f"{name}: windows {wa:.2f} m2 < ventilation {need_v:.2f} m2 "
+                    f"(5% of {area_spec:.2f})", room=name)
+            declared = room.get("ventilation_m2")
             if declared is not None and abs(float(declared) - wa) > TOL:
                 warn("VENT_DECLARED_MISMATCH",
-                    f"{name}: declarado {float(declared):.2f} m2 vs geometría {wa:.2f} m2",
-                    ambiente=name)
+                    f"{name}: declared {float(declared):.2f} m2 vs geometry {wa:.2f} m2",
+                    room=name)
 
-    # --- solapamiento entre ambientes ---
-    ambs = spec.get("ambientes", [])
-    for i, a in enumerate(ambs):
+    # --- room overlap ---
+    rooms = spec.get("rooms", [])
+    for i, a in enumerate(rooms):
         ax0, ay0, ax1, ay1 = _rect(a)
-        for b in ambs[i + 1:]:
+        for b in rooms[i + 1:]:
             bx0, by0, bx1, by1 = _rect(b)
             ox = min(ax1, bx1) - max(ax0, bx0)
             oy = min(ay1, by1) - max(ay0, by0)
             if ox > TOL and oy > TOL:
                 err("ROOM_OVERLAP",
-                    f"{a['nombre']} y {b['nombre']} se solapan {ox:.2f}x{oy:.2f} m",
-                    ambientes=[a["nombre"], b["nombre"]])
+                    f"{a['name']} and {b['name']} overlap {ox:.2f}x{oy:.2f} m",
+                    rooms=[a["name"], b["name"]])
 
-    # --- muros: espesores y aberturas ---
-    for w in spec["muros"]:
-        t = float(w.get("espesor", 0.0))
-        tipo = w.get("tipo", "interior")
-        key = "exterior_min" if tipo == "exterior" else "interior_min"
-        if t + 1e-9 < rules["muros"][key]:
+    # --- walls: thickness and openings ---
+    for w in spec["walls"]:
+        t = float(w.get("thickness", 0.0))
+        wall_type = w.get("type", "interior")
+        key = "exterior_min" if wall_type == "exterior" else "interior_min"
+        if t + 1e-9 < rules["walls"][key]:
             err("WALL_THIN",
-                f"muro {w.get('id', '?')}: {t:.2f} m < mínimo {rules['muros'][key]} m ({tipo})")
+                f"wall {w.get('id', '?')}: {t:.2f} m < minimum {rules['walls'][key]} m ({wall_type})")
         L = math.hypot(w["p2"][0] - w["p1"][0], w["p2"][1] - w["p1"][1])
-        for o in w.get("aberturas", []):
-            a = float(o["s"]) - float(o["ancho"]) / 2
-            b = float(o["s"]) + float(o["ancho"]) / 2
+        for o in w.get("openings", []):
+            a = float(o["s"]) - float(o["width"]) / 2
+            b = float(o["s"]) + float(o["width"]) / 2
             if a < -1e-6 or b > L + 1e-6:
                 err("OPENING_OUT_OF_WALL",
-                    f"abertura {o.get('id', '?')} fuera del muro {w.get('id', '?')}")
-            if o.get("tipo") == "puerta":
-                kind = o.get("uso", "interior")
-                need = rules["puertas"].get(kind, rules["puertas"]["interior"])
-                if float(o["ancho"]) + 1e-9 < need:
+                    f"opening {o.get('id', '?')} outside wall {w.get('id', '?')}")
+            if o.get("type") == "door":
+                kind = o.get("use", "interior")
+                need = rules["doors"].get(kind, rules["doors"]["interior"])
+                if float(o["width"]) + 1e-9 < need:
                     err("DOOR_NARROW",
-                        f"puerta {o.get('id', '?')}: {o['ancho']:.2f} m < mínimo {need} m ({kind})")
+                        f"door {o.get('id', '?')}: {o['width']:.2f} m < minimum {need} m ({kind})")
 
-    # --- altura libre ---
-    alt = float(spec.get("altura_libre", 0.0))
-    if alt + 1e-9 < rules["altura_libre_min"]:
+    # --- clear height ---
+    alt = float(spec.get("clear_height", 0.0))
+    if alt + 1e-9 < rules["min_clear_height"]:
         err("CEILING_LOW",
-            f"altura libre {alt:.2f} m < mínimo {rules['altura_libre_min']} m")
+            f"clear height {alt:.2f} m < minimum {rules['min_clear_height']} m")
 
-    # --- altura de textos ---
-    hmin = rules["texto"]["altura_min"]
+    # --- text height ---
+    hmin = rules["text"]["min_height"]
     for t in msp.query("TEXT MTEXT"):
         h = getattr(t.dxf, "height", None) or getattr(t.dxf, "char_height", None)
         if h is not None and h + 1e-9 < hmin:
-            warn("TEXT_SMALL", f"texto de altura {h:.2f} m < {hmin} m",
+            warn("TEXT_SMALL", f"text height {h:.2f} m < {hmin} m",
                  handle=t.dxf.handle)
 
     stats = {
-        "polilineas": len(polylines),
-        "ambientes_dxf": len(dxf_rooms),
-        "ambientes_spec": len(ambs),
-        "puertas": sum(1 for w in spec["muros"] for o in w.get("aberturas", [])
-                       if o.get("tipo") == "puerta"),
-        "ventanas": sum(1 for w in spec["muros"] for o in w.get("aberturas", [])
-                        if o.get("tipo") == "ventana"),
-        "ventana_m2": round(sum(win_area.values()), 2),
-        "superficie_total_m2": round(sum(
-            float(a["w"]) * float(a["h"]) for a in ambs), 2),
+        "polylines": len(polylines),
+        "rooms_dxf": len(dxf_rooms),
+        "rooms_spec": len(rooms),
+        "doors": sum(1 for w in spec["walls"] for o in w.get("openings", [])
+                     if o.get("type") == "door"),
+        "windows": sum(1 for w in spec["walls"] for o in w.get("openings", [])
+                       if o.get("type") == "window"),
+        "window_m2": round(sum(win_area.values()), 2),
+        "total_area_m2": round(sum(
+            float(a["w"]) * float(a["h"]) for a in rooms), 2),
     }
 
     return {
@@ -233,36 +233,36 @@ def check(dxf_path: Path, spec: dict, rules: dict) -> dict:
         "errors": errors,
         "warnings": warnings,
         "stats": stats,
-        "rules_source": rules.get("fuente", ""),
+        "rules_source": rules.get("source", ""),
     }
 
 
 def main() -> int:
     if len(sys.argv) < 3:
-        print("uso: python3 check.py OUT.dxf SPEC.json [RULES.json]", file=sys.stderr)
+        print("usage: python3 check.py OUT.dxf SPEC.json [RULES.json]", file=sys.stderr)
         return 2
     dxf = Path(sys.argv[1])
     spec = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
-    rules_path = Path(sys.argv[3]) if len(sys.argv) > 3 else Path(__file__).with_name("rules_caba.json")
+    rules_path = Path(sys.argv[3]) if len(sys.argv) > 3 else Path(__file__).with_name("caba_rules.json")
     rules = json.loads(rules_path.read_text(encoding="utf-8"))
 
     rep = check(dxf, spec, rules)
     out = dxf.with_suffix(".report.json")
     out.write_text(json.dumps(rep, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(f"\n{'='*64}\nVALIDACIÓN: {dxf.name}\n{'='*64}")
+    print(f"\n{'='*64}\nVALIDATION: {dxf.name}\n{'='*64}")
     for e in rep["errors"]:
         print(f"  ERROR  [{e['code']}] {e['msg']}")
     for w in rep["warnings"]:
-        print(f"  aviso  [{w['code']}] {w['msg']}")
+        print(f"  warning [{w['code']}] {w['msg']}")
     s = rep["stats"]
-    print(f"\n  ambientes: {s['ambientes_dxf']}/{s['ambientes_spec']}  "
-          f"puertas: {s['puertas']}  ventanas: {s['ventanas']} ({s['ventana_m2']} m2)  "
-          f"superficie: {s['superficie_total_m2']} m2")
-    print(f"  reglas: {rep['rules_source']}")
-    estado = "OK" if rep["ok"] else f"{len(rep['errors'])} ERROR(ES)"
-    print(f"  resultado: {estado}")
-    print(f"  reporte: {out}\n")
+    print(f"\n  rooms: {s['rooms_dxf']}/{s['rooms_spec']}  "
+          f"doors: {s['doors']}  windows: {s['windows']} ({s['window_m2']} m2)  "
+          f"area: {s['total_area_m2']} m2")
+    print(f"  rules: {rep['rules_source']}")
+    status = "OK" if rep["ok"] else f"{len(rep['errors'])} ERROR(S)"
+    print(f"  result: {status}")
+    print(f"  report: {out}\n")
     return 0 if rep["ok"] else 1
 
 

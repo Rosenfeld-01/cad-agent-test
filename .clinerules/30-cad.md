@@ -1,53 +1,35 @@
 # 30 — CAD
 
-## Verdad geométrica vs. estética
+## Geometric truth vs. aesthetics
 
-- **Geometría / medidas / reglas** → `inspect_drawing`, `query_entities`,
-  `find_text` (datos exactos) y `check.py`. Es la verdad.
-- **Estética / legibilidad / "se ve bien"** → `render` (PNG) + modelo de visión.
-- Si el render y los datos no coinciden, **mandan los datos**.
+- **Geometry / dimensions / rules** → `inspect_drawing`, `query_entities`,
+  `find_text` (exact data) and `check.py`. This is the truth.
+- **Aesthetics / legibility / "looks right"** → `render` (PNG) + vision model.
+- If the render and the data disagree, **the data wins**.
 
-## Herramientas
+## Tools
 
 - MCP `cadcraft`: `command_line`, `script`, `execute`, `inspect_drawing`,
   `query_entities`, `find_text`, `render`, `open`, `save`, `new_drawing`,
   `cancel`, `list_commands`.
 - CLI: `cadcraft-cli info | convert | run | commands | mcp`.
-- Python: `ezdxf` (lectura/escritura DXF), `matplotlib`.
+- Python: `ezdxf` (DXF read/write), `matplotlib`.
 
-## Límites de CADCraft
+## CADCraft limits
 
-- Está en desarrollo temprano: **las entidades que no modela se pierden al
-  guardar**. Guardá siempre una copia del original antes de sobrescribir.
-- Al abrir un DWG, revisar `warnings` del MCP `open` y `readNotes` de
+- It is early-stage software: **entities it does not model are lost on save**.
+  Always keep a copy of the original before overwriting.
+- When opening a DWG, check the MCP `open` `warnings` and `readNotes` from
   `cadcraft-cli info`.
-- Después de cada guardado, verificar con `cadcraft-cli info` que el conteo de
-  entidades no bajó.
-- No prometas fidelidad total contra AutoCAD. Validá el round-trip.
+- After every save, verify with `cadcraft-cli info` that the entity count did not
+  drop.
+- Do not promise full AutoCAD fidelity. Validate the round-trip.
+- Do not use screenshots as the source of geometric truth.
 
-## Catálogo de bloques
+## Units and layers
 
-`CAD_Blocks/` tiene 71 bloques (mobiliario, artefactos, instalaciones). Usalos;
-no dibujes símbolos a mano. El índice está en `CAD_Blocks/index.json`.
-
-## Juego de láminas
-
-Antes de abrir `planos.py` o `planos_lib.py`: leer **`PLAYBOOK.md` §2** (índice de
-funciones por línea) y §3 (comandos). No leer los archivos completos.
-
-- Build parcial por hoja: `python3 planos.py L07`.
-- Gate de láminas: `python3 tools/qa_laminas.py out/L07.dxf`.
-- Gate de geometría: `python3 tools/qa_geometria.py out/L07.dxf`.
-- Nunca leer un `.dxf` completo: se consulta con los gates, `find_text` o
-  `query_entities`.
-
-## Errores que ya se pagaron (no repetir)
-
-- Un gate que miente es peor que no tener gate: probalo contra
-  `tools/mk_dxf_roto.py`.
-- La barra de escala a 1:25 se sale de la hoja si no se ajustan los tramos.
-- Las marcas de corte no deben invadir la cadena de cotas.
-- Las fachadas necesitan niveles (+0,00 / +2,90 / +5,75 / +6,55).
-- Las redes de agua van en capas separadas y empotradas en el muro.
-- Un bloque puede estar dentro de una mesada, nunca invadir el barrido de una
-  puerta.
+- 1 unit = 1 m. `$INSUNITS = 6`.
+- Layers: `A-WALL`, `A-DOOR`, `A-WIN`, `A-AREA`, `A-ANNO`, `A-DIM`, `A-AXIS`.
+- Level 2 adds `A-MOB`, `A-HATCH`, `A-ESC`, `X-FRAME`, `I-ELE`, `I-SAN`,
+  `I-GAS`, `I-AF`, `I-AC`, `I-CL`, `I-PL`.
+- Minimum text height: 0.15 m. Dimensions in meters with two decimals.

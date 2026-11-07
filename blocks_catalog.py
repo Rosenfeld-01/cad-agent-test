@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-blocks_catalog.py — lámina índice de la biblioteca CAD_Blocks (Fase 1).
+blocks_catalog.py — index sheet for the CAD_Blocks library.
 
-Genera CAD_Blocks/catalogo.dxf (A0, metros de papel) con todos los bloques en
-grilla, su nombre, medidas y la escala a la que está dibujado cada uno.
-Después se exporta a PNG con cadcraft-cli.
+Builds CAD_Blocks/catalog.dxf (A0, paper meters) with all blocks in a grid,
+their name, dimensions, and the scale each one is drawn at. It is then exported
+to PNG with cadcraft-cli.
 """
 from __future__ import annotations
 
@@ -15,68 +15,68 @@ import ezdxf
 from ezdxf import bbox
 
 import blocks_build as BB
-import blocks_data_arquitectura as DA
-import blocks_data_bano_exterior as DB
-import blocks_data_instalaciones as DI
+import blocks_data_architecture as DA
+import blocks_data_bathroom_exterior as DB
+import blocks_data_services as DI
 
 BASE = Path(__file__).resolve().parent
-DESTINO = BASE / "CAD_Blocks"
+DESTINATION = BASE / "CAD_Blocks"
 
-ANCHO, ALTO = 1.189, 0.841      # A0 en metros de papel
-COLUMNAS = 7
-MARGEN = 0.020
-TITULO_H = 0.055
+WIDTH, HEIGHT = 1.189, 0.841      # A0 in paper meters
+COLUMNS = 7
+MARGIN = 0.020
+TITLE_H = 0.055
 
 
 def main() -> int:
-    items = sorted(DA.BLOQUES + DB.BLOQUES + DI.BLOQUES,
-                   key=lambda x: (x["cat"], x["nombre"]))
+    items = sorted(DA.BLOCKS + DB.BLOCKS + DI.BLOCKS,
+                   key=lambda x: (x["category"], x["name"]))
     doc = ezdxf.new("R2013", setup=True)
     doc.units = ezdxf.units.M
     doc.header["$INSUNITS"] = 6
     msp = doc.modelspace()
-    for capa, color in (("0", 7), ("X-FRAME", 7), ("A-ANNO", 7), ("A-MOB", 30)):
-        if capa != "0":
-            doc.layers.add(capa, color=color)
+    for layer, color in (("0", 7), ("X-FRAME", 7), ("A-ANNO", 7), ("A-MOB", 30)):
+        if layer != "0":
+            doc.layers.add(layer, color=color)
 
-    # definiciones de bloque
+    # block definitions
     for it in items:
-        blk = doc.blocks.new(it["nombre"])
-        BB.dibujar(blk, it)
+        blk = doc.blocks.new(it["name"])
+        BB.draw(blk, it)
 
-    # marco y título
-    msp.add_lwpolyline([(0, 0), (ANCHO, 0), (ANCHO, ALTO), (0, ALTO)], close=True,
+    # frame and title
+    msp.add_lwpolyline([(0, 0), (WIDTH, 0), (WIDTH, HEIGHT), (0, HEIGHT)], close=True,
                        dxfattribs={"layer": "X-FRAME"})
-    msp.add_text("BIBLIOTECA DE BLOQUES - VIVIENDA 02", height=0.010,
-                 dxfattribs={"layer": "A-ANNO"}).set_placement((MARGEN, ALTO - 0.030))
-    msp.add_text(f"{len(items)} bloques - metros 1:1 - punto de inserción (0,0) - "
-                 "escala de lámina = escala/1000", height=0.0045,
-                 dxfattribs={"layer": "A-ANNO"}).set_placement((MARGEN, ALTO - 0.045))
+    msp.add_text("CAD_Blocks LIBRARY - HOUSING", height=0.010,
+                 dxfattribs={"layer": "A-ANNO"}).set_placement((MARGIN, HEIGHT - 0.030))
+    msp.add_text(f"{len(items)} blocks - 1:1 meters - insertion point (0,0) - "
+                 "sheet scale = scale/1000", height=0.0045,
+                 dxfattribs={"layer": "A-ANNO"}).set_placement((MARGIN, HEIGHT - 0.045))
 
-    util_alto = ALTO - TITULO_H - MARGEN
-    filas = -(-len(items) // COLUMNAS)
-    cw = (ANCHO - 2 * MARGEN) / COLUMNAS
-    ch = util_alto / filas
+    usable_height = HEIGHT - TITLE_H - MARGIN
+    rows = -(-len(items) // COLUMNS)
+    cw = (WIDTH - 2 * MARGIN) / COLUMNS
+    ch = usable_height / rows
 
     for i, it in enumerate(items):
-        fil, col = divmod(i, COLUMNAS)
-        x0 = MARGEN + col * cw
-        y0 = ALTO - TITULO_H - (fil + 1) * ch
-        # recuadro de la celda
+        row, col = divmod(i, COLUMNS)
+        x0 = MARGIN + col * cw
+        y0 = HEIGHT - TITLE_H - (row + 1) * ch
+        # cell frame
         msp.add_lwpolyline([(x0, y0), (x0 + cw, y0), (x0 + cw, y0 + ch), (x0, y0 + ch)],
                            close=True, dxfattribs={"layer": "X-FRAME"})
-        # encuadre por la caja real del bloque (no por las medidas declaradas)
-        caja = bbox.extents(list(doc.blocks.get(it["nombre"])))
-        if caja.has_data:
-            bw, bh = caja.size.x or 0.1, caja.size.y or 0.1
-            bx, by = (caja.extmin.x + caja.extmax.x) / 2, (caja.extmin.y + caja.extmax.y) / 2
+        # fit to the real block box (not the declared dimensions)
+        box = bbox.extents(list(doc.blocks.get(it["name"])))
+        if box.has_data:
+            bw, bh = box.size.x or 0.1, box.size.y or 0.1
+            bx, by = (box.extmin.x + box.extmax.x) / 2, (box.extmin.y + box.extmax.y) / 2
         else:
             bw, bh, bx, by = it["w"], it["h"], it["w"] / 2, it["h"] / 2
         f = min((cw * 0.78) / bw, (ch * 0.66) / bh)
-        msp.add_blockref(it["nombre"],
+        msp.add_blockref(it["name"],
                          (x0 + cw / 2 - f * bx, y0 + ch * 0.52 - f * by),
                          dxfattribs={"xscale": f, "yscale": f})
-        msp.add_text(it["nombre"], height=0.0036,
+        msp.add_text(it["name"], height=0.0036,
                      dxfattribs={"layer": "A-ANNO"}).set_placement(
             (x0 + cw / 2, y0 + 0.0135),
             align=ezdxf.enums.TextEntityAlignment.MIDDLE_CENTER)
@@ -85,12 +85,12 @@ def main() -> int:
             (x0 + cw / 2, y0 + 0.0055),
             align=ezdxf.enums.TextEntityAlignment.MIDDLE_CENTER)
 
-    dxf = DESTINO / "catalogo.dxf"
+    dxf = DESTINATION / "catalog.dxf"
     doc.saveas(dxf)
-    png = DESTINO / "catalogo.png"
+    png = DESTINATION / "catalog.png"
     subprocess.run(["cadcraft-cli", "convert", str(dxf), str(png)],
                    capture_output=True, text=True)
-    print(f"OK catalogo: {dxf.name} / {png.name} ({png.stat().st_size if png.exists() else 0} B)")
+    print(f"OK catalog: {dxf.name} / {png.name} ({png.stat().st_size if png.exists() else 0} B)")
     return 0
 
 

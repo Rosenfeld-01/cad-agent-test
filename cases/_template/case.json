@@ -1,0 +1,22 @@
+{
+  "slug": "<slug>",
+  "version": 1,
+  "title": "<project title>",
+  "date": "<YYYY-MM-DD>",
+  "status": "draft",
+  "level": 1,
+  "typology": "<id from typologies/>",
+  "brief": "cases/<slug>/brief.json",
+  "specs": ["cases/<slug>/spec.json"],
+  "outputs": {
+    "dxf": "out/<slug>/spec.dxf",
+    "report": "out/<slug>/spec.report.json"
+  },
+  "metrics": {
+    "area_m2": null,
+    "rooms": null,
+    "report_ok": false
+  },
+  "lessons": "cases/<slug>/decisions.md",
+  "tags": []
+}

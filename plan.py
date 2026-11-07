@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """
-plan.py — generador paramétrico de planos de vivienda (DXF) para CADCraft.
+plan.py — parametric housing floor-plan generator (DXF) for CADCraft.
 
-Lee un spec JSON (intención del diseño) y emite un DXF con:
-  - muros como polilíneas cerradas (A-WALL), con aberturas reales (huecos)
-  - puertas con hoja + arco de giro (A-DOOR)
-  - ventanas con doble línea (A-WIN)
-  - ambientes con polígono cerrado + nombre y superficie (A-AREA / A-ANNO)
-  - cotas generales (A-DIM)
+Reads a JSON spec (design intent) and emits a DXF with:
+  - walls as closed polylines (A-WALL), with real openings (gaps)
+  - doors with leaf + swing arc (A-DOOR)
+  - windows with double lines (A-WIN)
+  - rooms as closed polygons + name and area (A-AREA / A-ANNO)
+  - overall dimensions (A-DIM)
 
-No dibuja a mano: todo sale del spec. El agente edita el spec, no el DXF.
+Nothing is drawn by hand: everything comes from the spec. The agent edits the
+spec, not the DXF.
 
-Uso:
-    python3 plan.py typologies/semillas/casa_8.66x20.json out/planta.dxf
+Usage:
+    python3 plan.py typologies/seeds/house_8.66x20.json out/plan.dxf
 """
 from __future__ import annotations
 
@@ -27,38 +28,38 @@ from ezdxf.enums import TextEntityAlignment
 APPID = "CADAGENT"
 
 LAYERS = {
-    "A-WALL": 7,      # muros
-    "A-DOOR": 3,      # puertas
-    "A-WIN": 4,       # ventanas
-    "A-AREA": 8,      # polígonos de ambiente
-    "A-ANNO": 2,      # textos / nombres
-    "A-DIM": 1,       # cotas
-    "A-AXIS": 6,      # ejes
+    "A-WALL": 7,      # walls
+    "A-DOOR": 3,      # doors
+    "A-WIN": 4,       # windows
+    "A-AREA": 8,      # room polygons
+    "A-ANNO": 2,      # text / names
+    "A-DIM": 1,       # dimensions
+    "A-AXIS": 6,      # axes
 }
 
 
-def _v(x):
+def _vec(x):
     return ezdxf.math.Vec2(x[0], x[1])
 
 
 def _wall_solids(p1, p2, t, openings):
-    """Devuelve los tramos sólidos del muro (rectángulos) y los datos de apoyo."""
-    p1, p2 = _v(p1), _v(p2)
+    """Return the solid wall spans (rectangles) and support data."""
+    p1, p2 = _vec(p1), _vec(p2)
     delta = p2 - p1
     length = delta.magnitude
     if length < 1e-9:
-        raise ValueError("muro de longitud cero")
+        raise ValueError("zero-length wall")
     u = delta.normalize()
     n = ezdxf.math.Vec2((-u.y, u.x))
 
     ops = sorted(openings, key=lambda o: o["s"])
     cuts = []
     for o in ops:
-        a = o["s"] - o["ancho"] / 2.0
-        b = o["s"] + o["ancho"] / 2.0
+        a = o["s"] - o["width"] / 2.0
+        b = o["s"] + o["width"] / 2.0
         if a < -1e-6 or b > length + 1e-6:
             raise ValueError(
-                f"abertura fuera del muro (s={o['s']}, ancho={o['ancho']}, L={length:.2f})"
+                f"opening outside wall (s={o['s']}, width={o['width']}, L={length:.2f})"
             )
         cuts.append((max(a, 0.0), min(b, length), o))
 
@@ -78,10 +79,10 @@ def _wall_solids(p1, p2, t, openings):
     return solids, u, n, length, cuts
 
 
-def _pip_convex(px, py, poly, eps=1e-9):
-    """True si (px,py) está dentro de un polígono convexo (o en borde)."""
+def _point_in_convex(px, py, poly, eps=1e-9):
+    """True if (px,py) is inside a convex polygon (or on its edge)."""
     n = len(poly)
-    signo = 0
+    sign = 0
     for i in range(n):
         ax, ay = poly[i]
         bx, by = poly[(i + 1) % n]
@@ -92,19 +93,20 @@ def _pip_convex(px, py, poly, eps=1e-9):
             s = -1
         else:
             continue
-        if signo == 0:
-            signo = s
-        elif s != signo:
+        if sign == 0:
+            sign = s
+        elif s != sign:
             return False
     return True
 
 
-def _segmentos_union(solids, eps=1e-3):
-    """Aristas atómicas en la frontera de la unión de sólidos (polígonos convexos).
+def _union_segments(solids, eps=1e-3):
+    """Atomic edges on the boundary of the union of solids (convex polygons).
 
-    Devuelve segmentos dirigidos (interior a la izquierda): contorno CCW de los
-    cuerpos y CW de los huecos.  Se parte cada arista en cruces y proyecciones
-    de vértices, se descartan las interiores y se orienta por muestreo lateral.
+    Returns directed segments (interior on the left): CCW outline of the bodies
+    and CW outline of the holes. Each edge is split at crossings and vertex
+    projections; interior pieces are discarded and orientation is decided by
+    sampling both sides.
     """
     edges = []
     pts = []
@@ -116,20 +118,20 @@ def _segmentos_union(solids, eps=1e-3):
             edges.append((a, b))
             pts.append(a)
 
-    # 1) parámetros de corte por arista (extremos + intersecciones + vértices)
-    cortes = [[0.0, 1.0] for _ in edges]
+    # 1) cut parameters per edge (ends + intersections + vertices)
+    cuts = [[0.0, 1.0] for _ in edges]
     for i, (a, b) in enumerate(edges):
         dx, dy = b[0] - a[0], b[1] - a[1]
         L2 = dx * dx + dy * dy
         if L2 < 1e-18:
             continue
-        for (px, py) in pts:                       # proyecciones de vértices
+        for (px, py) in pts:                       # vertex projections
             t = ((px - a[0]) * dx + (py - a[1]) * dy) / L2
             if 1e-9 < t < 1 - 1e-9:
                 qx, qy = a[0] + dx * t, a[1] + dy * t
                 if abs(qx - px) < 1e-7 and abs(qy - py) < 1e-7:
-                    cortes[i].append(t)
-        for j, (c, d) in enumerate(edges):         # cruces con otras aristas
+                    cuts[i].append(t)
+        for j, (c, d) in enumerate(edges):         # crossings with other edges
             if j == i:
                 continue
             ex, ey = d[0] - c[0], d[1] - c[1]
@@ -139,13 +141,13 @@ def _segmentos_union(solids, eps=1e-3):
             t = ((c[0] - a[0]) * ey - (c[1] - a[1]) * ex) / den
             u = ((c[0] - a[0]) * dy - (c[1] - a[1]) * dx) / den
             if 1e-9 < t < 1 - 1e-9 and -1e-9 < u < 1 + 1e-9:
-                cortes[i].append(t)
+                cuts[i].append(t)
 
-    # 2) subsegmentos únicos (sin duplicar aristas coincidentes)
+    # 2) unique subsegments (without duplicating coincident edges)
     uniq = {}
     for i, (a, b) in enumerate(edges):
         dx, dy = b[0] - a[0], b[1] - a[1]
-        ts = sorted(set(round(t, 9) for t in cortes[i]))
+        ts = sorted(set(round(t, 9) for t in cuts[i]))
         for t0, t1 in zip(ts, ts[1:]):
             if t1 - t0 < 1e-9:
                 continue
@@ -155,8 +157,8 @@ def _segmentos_union(solids, eps=1e-3):
             if p0 != p1:
                 uniq[k] = (p0, p1)
 
-    # 3) frontera orientada (interior a la izquierda)
-    dirig = []
+    # 3) oriented boundary (interior on the left)
+    directed = []
     for p0, p1 in uniq.values():
         mx, my = (p0[0] + p1[0]) / 2.0, (p0[1] + p1[1]) / 2.0
         dx, dy = p1[0] - p0[0], p1[1] - p0[1]
@@ -164,91 +166,91 @@ def _segmentos_union(solids, eps=1e-3):
         if L < 1e-12:
             continue
         nx, ny = -dy / L, dx / L
-        izq = any(_pip_convex(mx + nx * eps, my + ny * eps, s) for s in solids)
-        der = any(_pip_convex(mx - nx * eps, my - ny * eps, s) for s in solids)
-        if izq and not der:
-            dirig.append((p0, p1))
-        elif der and not izq:
-            dirig.append((p1, p0))
-    return dirig
+        left = any(_point_in_convex(mx + nx * eps, my + ny * eps, s) for s in solids)
+        right = any(_point_in_convex(mx - nx * eps, my - ny * eps, s) for s in solids)
+        if left and not right:
+            directed.append((p0, p1))
+        elif right and not left:
+            directed.append((p1, p0))
+    return directed
 
 
-def _encadenar(dirig):
-    """Une segmentos dirigidos (interior a la izquierda) en lazos cerrados."""
-    if not dirig:
+def _chain_loops(directed):
+    """Join directed segments (interior on the left) into closed loops."""
+    if not directed:
         return []
-    salidas = {}
-    for a, b in dirig:
-        salidas.setdefault(a, []).append(b)
+    outgoing = {}
+    for a, b in directed:
+        outgoing.setdefault(a, []).append(b)
 
-    def ang(a, b):
+    def angle(a, b):
         return math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])) % 360.0
 
-    usados = set()
-    lazos = []
-    for ini in list(salidas):
-        for nxt in salidas[ini]:
-            if (ini, nxt) in usados:
+    used = set()
+    loops = []
+    for start in list(outgoing):
+        for nxt in outgoing[start]:
+            if (start, nxt) in used:
                 continue
-            lazo = [ini]
-            prev, cur = ini, nxt
-            usados.add((prev, cur))
-            while cur != ini:
-                lazo.append(cur)
-                cands = [b for b in salidas.get(cur, []) if (cur, b) not in usados]
-                if not cands:
+            loop = [start]
+            prev, cur = start, nxt
+            used.add((prev, cur))
+            while cur != start:
+                loop.append(cur)
+                candidates = [b for b in outgoing.get(cur, []) if (cur, b) not in used]
+                if not candidates:
                     break
-                a_in = ang(prev, cur)
-                # giro más cerrado a la izquierda = menor rotación horaria de la inversa
-                def clave(b):
-                    return (a_in + 180.0 - ang(cur, b)) % 360.0
-                nxt2 = min(cands, key=clave)
-                usados.add((cur, nxt2))
+                incoming_angle = angle(prev, cur)
+                # tightest left turn = smallest clockwise rotation of the reverse
+                def key(b):
+                    return (incoming_angle + 180.0 - angle(cur, b)) % 360.0
+                nxt2 = min(candidates, key=key)
+                used.add((cur, nxt2))
                 prev, cur = cur, nxt2
-            if len(lazo) >= 3 and cur == ini:
-                lazos.append(lazo)
-    return lazos
+            if len(loop) >= 3 and cur == start:
+                loops.append(loop)
+    return loops
 
 
 def wall_outline(walls, ext=0.20):
-    """Contorno (unión) de un conjunto de muros como lazos cerrados en proyecto.
+    """Union outline of a set of walls as closed loops in project coordinates.
 
-    Reemplaza el dibujo de un rectángulo por muro (que se solapaba en esquinas y
-    cruces) por la frontera real de la unión.  Devuelve lista de lazos [(x,y)...].
+    Replaces one rectangle per wall (which overlapped at corners and crossings)
+    with the real boundary of the union. Returns a list of loops [(x,y)...].
     """
     solids = []
     for w in walls:
-        p1, p2 = _v(w["p1"]), _v(w["p2"])
-        t = float(w.get("espesor", ext))
-        s, _u, _n, _L, _cuts = _wall_solids(p1, p2, t, w.get("aberturas", []))
+        p1, p2 = _vec(w["p1"]), _vec(w["p2"])
+        t = float(w.get("thickness", ext))
+        s, _u, _n, _L, _cuts = _wall_solids(p1, p2, t, w.get("openings", []))
         for pts in s:
             solids.append([(p.x, p.y) for p in pts])
-    return _encadenar(_segmentos_union(solids))
+    return _chain_loops(_union_segments(solids))
 
 
 def _draw_opening(msp, p1, u, n, t, a, b, kind):
-    """Símbolo de la abertura en el hueco [a, b]."""
+    """Opening symbol in the gap [a, b]."""
     pa, pb = p1 + u * a, p1 + u * b
-    if kind == "puerta":
+    if kind == "door":
         hinge = pa + n * (t / 2)
         leaf_end = hinge + n * (b - a)
         msp.add_line(hinge, leaf_end, dxfattribs={"layer": "A-DOOR"})
         ang_u = math.degrees(math.atan2(u.y, u.x))
         ang_n = math.degrees(math.atan2(n.y, n.x))
-        # arco de 90° desde la hoja hasta el muro
+        # 90-degree arc from the leaf to the wall
         msp.add_arc(
             center=hinge, radius=(b - a),
             start_angle=min(ang_u, ang_n), end_angle=max(ang_u, ang_n),
             dxfattribs={"layer": "A-DOOR"},
         )
-    elif kind == "ventana":
+    elif kind == "window":
         off = t / 6.0
         for s in (off, -off):
             msp.add_line(pa + n * s, pb + n * s, dxfattribs={"layer": "A-WIN"})
-    elif kind == "hueco":
+    elif kind == "opening":
         pass
     else:
-        raise ValueError(f"tipo de abertura desconocido: {kind}")
+        raise ValueError(f"unknown opening type: {kind}")
 
 
 def build(spec: dict, out: Path) -> Path:
@@ -262,37 +264,42 @@ def build(spec: dict, out: Path) -> Path:
             doc.layers.add(name, color=color)
 
     msp = doc.modelspace()
-    ext = spec["muros"].get("exterior", 0.20) if isinstance(spec.get("muros"), dict) else 0.20
+    walls_data = spec["walls"]
+    if isinstance(walls_data, dict):
+        ext = walls_data.get("exterior", 0.20)
+        walls = walls_data["segments"]
+    else:
+        ext = 0.20
+        walls = walls_data
 
-    walls = spec["muros"] if isinstance(spec["muros"], list) else spec["muros"]["segmentos"]
-    # un solo contorno (unión) por región: evita muros solapados en esquinas/cruces
+    # One union outline per region: avoids overlapping walls at corners/crossings.
     for loop in wall_outline(walls, ext):
         msp.add_lwpolyline([(x, y) for x, y in loop], close=True,
                            dxfattribs={"layer": "A-WALL"})
     for w in walls:
-        p1, p2 = _v(w["p1"]), _v(w["p2"])
-        t = float(w.get("espesor", ext))
-        _solids, u, n, _length, cuts = _wall_solids(p1, p2, t, w.get("aberturas", []))
+        p1, p2 = _vec(w["p1"]), _vec(w["p2"])
+        t = float(w.get("thickness", ext))
+        _solids, u, n, _length, cuts = _wall_solids(p1, p2, t, w.get("openings", []))
         for a, b, o in cuts:
-            _draw_opening(msp, p1, u, n, t, a, b, o.get("tipo", "hueco"))
+            _draw_opening(msp, p1, u, n, t, a, b, o.get("type", "opening"))
 
-    # Ambientes: polígono + etiqueta
-    for amb in spec.get("ambientes", []):
-        x, y = float(amb["x"]), float(amb["y"])
-        w, h = float(amb["w"]), float(amb["h"])
+    # Rooms: polygon + label
+    for room in spec.get("rooms", []):
+        x, y = float(room["x"]), float(room["y"])
+        w, h = float(room["w"]), float(room["h"])
         pts = [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
         pl = msp.add_lwpolyline(pts, close=True, dxfattribs={"layer": "A-AREA"})
-        pl.set_xdata(APPID, [(1000, amb["nombre"])])
+        pl.set_xdata(APPID, [(1000, room["name"])])
         area = w * h
         cx, cy = x + w / 2, y + h / 2
-        name = msp.add_text(amb["nombre"], height=0.20,
+        name = msp.add_text(room["name"], height=0.20,
                             dxfattribs={"layer": "A-ANNO"})
         name.set_placement((cx, cy + 0.20), align=TextEntityAlignment.MIDDLE_CENTER)
         val = msp.add_text(f"{area:.1f} m2", height=0.16,
                            dxfattribs={"layer": "A-ANNO"})
         val.set_placement((cx, cy - 0.15), align=TextEntityAlignment.MIDDLE_CENTER)
 
-    # Cotas generales
+    # Overall dimensions
     xs = [p[0] for w in walls for p in (w["p1"], w["p2"])]
     ys = [p[1] for w in walls for p in (w["p1"], w["p2"])]
     x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
@@ -310,7 +317,7 @@ def build(spec: dict, out: Path) -> Path:
 
 def main() -> int:
     if len(sys.argv) != 3:
-        print("uso: python3 plan.py SPEC.json OUT.dxf", file=sys.stderr)
+        print("usage: python3 plan.py SPEC.json OUT.dxf", file=sys.stderr)
         return 2
     spec = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     out = build(spec, Path(sys.argv[2]))

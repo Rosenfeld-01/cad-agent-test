@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
-# test_gates.sh — autotest de los gates de QA.
+# test_gates.sh — self-test for the QA gates.
 #
-# Genera un DXF con defectos a propósito (tests/_roto.dxf) y comprueba que
-# qa_laminas.py y qa_geometria.py lo detecten. Un gate que NO falla está roto
-# (ver docs/DEFECTOS_CONOCIDOS.md §6.1). Este script tiene que salir con 0.
+# Builds a deliberately broken DXF (tests/_broken.dxf) and checks that
+# qa_sheets.py and qa_geometry.py detect it. A gate that does NOT fail is
+# broken (see PLAYBOOK §8.1). This script must exit 0.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-ROTO="tests/_roto.dxf"
+BROKEN="tests/_broken.dxf"
 
-echo "== generar fixture roto =="
-python3 tests/mk_dxf_roto.py || { echo "no se generó el fixture"; exit 1; }
+echo "== build broken fixture =="
+python3 tests/make_broken_dxf.py || { echo "fixture was not created"; exit 1; }
 
-echo "== qa_laminas (debe detectar: exit 1) =="
-python3 tools/qa_laminas.py "$ROTO"; L=$?
+echo "== qa_sheets (must detect: exit 1) =="
+python3 tools/qa_sheets.py "$BROKEN"; S=$?
 
-echo "== qa_geometria (debe detectar: exit 1) =="
-python3 tools/qa_geometria.py "$ROTO"; G=$?
+echo "== qa_geometry (must detect: exit 1) =="
+python3 tools/qa_geometry.py "$BROKEN"; G=$?
 
-if [ "$L" -eq 1 ] && [ "$G" -eq 1 ]; then
-  echo "PASS: los dos gates detectan los defectos del fixture."
-  rm -f "$ROTO"
+if [ "$S" -eq 1 ] && [ "$G" -eq 1 ]; then
+  echo "PASS: both gates detect the fixture defects."
+  rm -f "$BROKEN"
   exit 0
 fi
-echo "FAIL: algún gate devolvió 0 (gate roto). qa_laminas=$L qa_geometria=$G"
+echo "FAIL: a gate returned 0 (broken gate). qa_sheets=$S qa_geometry=$G"
 exit 1

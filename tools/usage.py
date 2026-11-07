@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""usage.py — costo, llamadas y cache por proyecto a partir de las sesiones de Cline.
+"""usage.py — cost, calls, and cache per project from Cline sessions.
 
-Lee `~/.cline/data/sessions/*/*.json` (metadata de la sesion) y
-`*.messages.json` (metricas por respuesta del asistente). Con eso calcula:
+Reads `~/.cline/data/sessions/*/*.json` (session metadata) and
+`*.messages.json` (metrics per assistant response). It calculates:
 
-- llamadas: respuestas del asistente con metricas (una por request al modelo)
-- tokens de entrada, salida, cache read y cache write
+- calls: assistant responses with metrics (one per model request)
+- input, output, cache read, and cache write tokens
 - cache hit rate
-- costo en USD
-- duracion transcurrida
+- cost in USD
+- elapsed duration
 
-Uso:
+Usage:
     python3 tools/usage.py
     python3 tools/usage.py --project cad-agent
     python3 tools/usage.py --since 2026-11-01
@@ -19,10 +19,10 @@ Uso:
     python3 tools/usage.py --csv
     python3 tools/usage.py --project cad-agent --max-cost 1.00 --max-calls 1500
 
-Codigos de salida:
+Exit codes:
     0  OK
-    1  error de lectura / no hay sesiones
-    2  presupuesto excedido (--max-cost o --max-calls)
+    1  read error / no sessions
+    2  budget exceeded (--max-cost or --max-calls)
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ from pathlib import Path
 
 DEFAULT_SESSIONS = Path.home() / ".cline" / "data" / "sessions"
 
-# Un path de proyecto tipo /home/usuario/proyectos/cad-agent, dentro del prompt.
+# A project path such as /home/user/projects/cad-agent, inside the prompt.
 PROJECT_RE = re.compile(r"((?:/home|/Users|/srv|/opt)/[^\s`*]+?/proyectos/[^\s`*]+)")
 PATH_RE = re.compile(r"((?:/home|/Users|/srv|/opt)/[^\s`*]+)")
 
@@ -83,7 +83,7 @@ def detect_project(session: dict) -> str:
 
 
 def read_messages(path: Path | None) -> dict:
-    """Devuelve llamadas y sumas por mensaje del asistente."""
+    """Return calls and sums per assistant message."""
     out = {
         "calls": None,
         "input": 0,
@@ -150,7 +150,7 @@ def read_session(meta_path: Path, sessions_dir: Path, with_messages: bool) -> di
     if cost == 0 and msgs["cost"]:
         cost = float(msgs["cost"])
 
-    # Si la metadata no trae tokens, usar las sumas por mensaje.
+    # If metadata has no tokens, use the per-message sums.
     if input_tokens == 0 and msgs["input"]:
         input_tokens = msgs["input"]
     if output_tokens == 0 and msgs["output"]:
@@ -266,11 +266,11 @@ def fmt_duration(seconds: int | None) -> str:
 
 def print_table(rows: list[dict], t: dict) -> None:
     if not rows:
-        print("no hay sesiones que coincidan con el filtro")
+        print("no sessions match the filter")
         return
-    print(f"{'fecha':10s} {'sesion':20s} {'proyecto':18s} {'modelo':18s} "
-          f"{'estado':8s} {'llam':>6s} {'input':>8s} {'output':>8s} "
-          f"{'cache':>8s} {'hit%':>6s} {'costo':>9s} {'transc':>8s}")
+    print(f"{'date':10s} {'session':20s} {'project':18s} {'model':18s} "
+          f"{'status':8s} {'calls':>6s} {'input':>8s} {'output':>8s} "
+          f"{'cache':>8s} {'hit%':>6s} {'cost':>9s} {'elapsed':>8s}")
     print("-" * 132)
     for r in rows:
         print(f"{r['started_at'][:10]:10s} {r['session_id'][:20]:20s} "
@@ -280,20 +280,20 @@ def print_table(rows: list[dict], t: dict) -> None:
               f"{human(r['cache_read_tokens']):>8s} {r['cache_hit_rate']:6.1f} "
               f"{r['cost_usd']:9.4f} {fmt_duration(r['duration_s']):>8s}")
     print("-" * 132)
-    print(f"{'TOTAL':10s} {t['sessions']:>3d} sesiones  {t['calls']} llamadas  "
+    print(f"{'TOTAL':10s} {t['sessions']:>3d} sessions  {t['calls']} calls  "
           f"input {human(t['input_tokens'])}  output {human(t['output_tokens'])}  "
           f"cache {human(t['cache_read_tokens'])}  hit {t['cache_hit_rate']:.1f}%  "
           f"US$ {t['cost_usd']:.4f}  {fmt_duration(t['duration_s'])}")
     if t.get("tokens_per_call"):
-        print(f"promedio: {human(t['tokens_per_call'])} tokens de entrada por llamada")
+        print(f"average: {human(t['tokens_per_call'])} input tokens per call")
 
 
 def print_by_project(groups: list[dict]) -> None:
     if not groups:
-        print("no hay sesiones")
+        print("no sessions")
         return
-    print(f"{'proyecto':28s} {'ses':>4s} {'llam':>6s} {'input':>8s} "
-          f"{'output':>8s} {'cache':>8s} {'hit%':>6s} {'costo':>9s}")
+    print(f"{'project':28s} {'ses':>4s} {'calls':>6s} {'input':>8s} "
+          f"{'output':>8s} {'cache':>8s} {'hit%':>6s} {'cost':>9s}")
     print("-" * 86)
     for g in groups:
         print(f"{(Path(g['project']).name or g['project'])[:28]:28s} "
@@ -303,21 +303,21 @@ def print_by_project(groups: list[dict]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Uso y costo de Cline por proyecto.")
+    ap = argparse.ArgumentParser(description="Cline usage and cost per project.")
     ap.add_argument("--sessions-dir", type=Path, default=DEFAULT_SESSIONS,
-                    help="carpeta de sesiones de Cline")
-    ap.add_argument("--project", help="filtrar por proyecto (substring)")
-    ap.add_argument("--since", help="solo sesiones desde YYYY-MM-DD")
-    ap.add_argument("--session", help="solo una sesion por id")
-    ap.add_argument("--by-project", action="store_true", help="agrupar por proyecto")
-    ap.add_argument("--json", action="store_true", help="salida JSON")
-    ap.add_argument("--csv", action="store_true", help="salida CSV")
+                    help="Cline sessions folder")
+    ap.add_argument("--project", help="filter by project (substring)")
+    ap.add_argument("--since", help="only sessions since YYYY-MM-DD")
+    ap.add_argument("--session", help="only one session by id")
+    ap.add_argument("--by-project", action="store_true", help="group by project")
+    ap.add_argument("--json", action="store_true", help="JSON output")
+    ap.add_argument("--csv", action="store_true", help="CSV output")
     ap.add_argument("--no-messages", action="store_true",
-                    help="no leer messages.json (mas rapido, sin conteo de llamadas)")
+                    help="do not read messages.json (faster, no call count)")
     ap.add_argument("--max-cost", type=float, default=None,
-                    help="fallar si el costo total supera este valor (USD)")
+                    help="fail if total cost exceeds this value (USD)")
     ap.add_argument("--max-calls", type=int, default=None,
-                    help="fallar si las llamadas superan este valor")
+                    help="fail if calls exceed this value")
     args = ap.parse_args(argv)
 
     rows = collect(args.sessions_dir, args.project, args.since, args.session,
@@ -355,15 +355,15 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print_table(rows, t)
 
-    # Presupuesto
+    # Budget
     exceeded = []
     if args.max_cost is not None and t["cost_usd"] > args.max_cost:
-        exceeded.append(f"costo US$ {t['cost_usd']:.4f} > max US$ {args.max_cost:.4f}")
+        exceeded.append(f"cost US$ {t['cost_usd']:.4f} > max US$ {args.max_cost:.4f}")
     if args.max_calls is not None and t["calls"] > args.max_calls:
-        exceeded.append(f"llamadas {t['calls']} > max {args.max_calls}")
+        exceeded.append(f"calls {t['calls']} > max {args.max_calls}")
     if exceeded:
         print()
-        print("PRESUPUESTO EXCEDIDO: " + "; ".join(exceeded), file=sys.stderr)
+        print("BUDGET EXCEEDED: " + "; ".join(exceeded), file=sys.stderr)
         return 2
     return 0
 

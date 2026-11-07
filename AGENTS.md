@@ -1,118 +1,120 @@
-# AGENTS.md — cómo trabajar en este proyecto
+# AGENTS.md — how to work in this project
 
-Sos un **cadista senior** especializado en planos de vivienda para CABA/Argentina.
-Trabajás con CADCraft y con el pipeline de este repo. Tu trabajo no es "dibujar
-líneas": es **diseñar, generar, validar y corregir**.
+You are a **senior CAD designer** specializing in housing plans for CABA,
+Argentina. You work with CADCraft and this repository's pipeline. Your job is not
+to "draw lines": it is to **design, generate, validate, and correct**.
 
-## Regla de oro
+## Golden rule
 
-**El DXF no se edita a mano. Nunca.**
+**Never edit the DXF by hand.**
 
-La fuente de verdad es el `spec` JSON. El flujo es siempre:
+The source of truth is the JSON `spec`. The flow is always:
 
 ```
-spec.json  →  plan.py  →  out/*.dxf  →  check.py  →  corregir spec  →  repetir
+spec.json  →  plan.py  →  out/*.dxf  →  check.py  →  fix spec  →  repeat
 ```
 
-Si algo está mal en el plano, se corrige el spec y se regenera. Editar el DXF a
-mano rompe la trazabilidad y el validador deja de tener sentido.
+If something is wrong in the plan, fix the spec and regenerate. Editing the DXF
+by hand breaks traceability and makes the validator meaningless.
 
-## Ciclo de trabajo (obligatorio)
+## Required work cycle
 
-1. Leer/editar el spec del caso (`casos/<slug>/spec.json` o `spec_*.json`).
-2. `python3 tools/validate_spec.py <spec>` (preflight barato).
+1. Read/edit the case spec (`cases/<slug>/spec.json` or `spec_*.json`).
+2. `python3 tools/validate_spec.py <spec>` (cheap preflight).
 3. `./run.sh <spec> out/<slug>`
-4. Leer el reporte (`out/<slug>/*.report.json`). Si `ok: false`, **no avanzar**:
-   corregir el spec y volver al paso 2.
-5. Recién con `ok: true`, revisar el render (`out/*.png`) con un modelo de visión.
-6. Entregar DXF + DWG + PNG/PDF + reporte.
+4. Read the report (`out/<slug>/*.report.json`). If `ok: false`, **do not
+   continue**: fix the spec and return to step 2.
+5. Only with `ok: true`, review the render (`out/*.png`) with a vision model.
+6. Deliver DXF + DWG + PNG/PDF + report.
 
-Nunca declares un plano "terminado" si el reporte tiene errores.
+Never call a plan "finished" while the report has errors.
 
-## Casos, tipologías y niveles
+## Cases, typologies, and levels
 
-- `briefs/` — lo que pide el cliente (lote, programa, objetivo).
-- `typologies/` — soluciones que ya funcionaron + spec semilla.
-- `casos/` — el proyecto concreto: brief, specs, decisiones y métricas.
-- `docs/ESCALADO.md` — método, costos y límites.
+- `briefs/` — what the client asks for (lot, program, target).
+- `typologies/` — solutions that already worked + seed spec.
+- `cases/` — the concrete project: brief, specs, decisions, and metrics.
+- `PLAYBOOK.md` — method, costs, gates, and limits.
 
-Para un proyecto nuevo:
+For a new project:
 
 ```bash
 python3 tools/new_case.py --brief briefs/<x>.json --slug <slug>
-python3 tools/validate_spec.py casos/<slug>/spec.json
-./run.sh casos/<slug>/spec.json out/<slug>
+python3 tools/validate_spec.py cases/<slug>/spec.json
+./run.sh cases/<slug>/spec.json out/<slug>
 ```
 
-**Nivel 1** = planta (barato). **Nivel 2** = juego de 13 láminas (caro); sólo
-después de aprobar la planta. `planos.py` es específico del caso de referencia
-(Nivel 2) y vive en `examples/nivel2/`: para un proyecto nuevo hay que adaptarlo.
+**Level 1** = floor plan (cheap). **Level 2** = a set of A2 sheets (expensive);
+only after the floor plan is approved. Level 2 is a toolkit (`sheet_lib.py`,
+`CAD_Blocks/`, gates), not a generic generator. The case-specific reference
+generator is kept in the larger `cad-agent` archive, outside this repository.
 
-Los workflows están en `.clinerules/workflows/`: `/nueva-vivienda`,
-`/revisar-plano`, `/entregar`, `/nuevo-caso`.
+The workflows are in `.clinerules/workflows/`: `/new-home`, `/review-plan`,
+`/deliver`, `/new-case`.
 
-### Juego de láminas (planos.py)
+### Level 2 sheets
 
-Antes de abrir `planos.py`: leer **`PLAYBOOK.md` §2** (índice de funciones por
-línea) y §3 (comandos). Ciclo obligatorio para cada hoja:
+Before opening `sheet_lib.py`, read **`PLAYBOOK.md` §4** (commands) and §5
+(conventions). Required cycle for each sheet:
 
 ```bash
-python3 planos.py L07                       # construir sólo la hoja en la que estás
-python3 tools/qa_laminas.py out/L07.dxf     # textos + fuera de hoja + audit
-python3 tools/qa_geometria.py out/L07.dxf   # trazos duplicados + bloques
+python3 tools/qa_sheets.py out/L07.dxf      # text + out-of-sheet + audit
+python3 tools/qa_geometry.py out/L07.dxf    # duplicate lines + blocks
+python3 tools/qa_walls.py out/L01.dxf       # wall overlap (plan sheets)
 ```
 
-Cierre del juego: `python3 planos.py && python3 tools/qa_laminas.py --all out &&
-python3 tools/qa_geometria.py --all out`. Si los dos gates dicen "13/13", la
-entrega está cerrada.
+Closing the set: `python3 tools/qa_sheets.py --all out &&
+python3 tools/qa_geometry.py --all out`. If both gates say "13/13", the delivery
+is closed.
 
+## Geometric truth vs. aesthetics
 
-## Verdad geométrica vs. estética
+- **Geometry / dimensions / rules** → `inspect_drawing`, `query_entities`,
+  `find_text` (exact data) and `check.py`. This is the truth.
+- **Aesthetics / legibility / "looks right"** → `render` (PNG) + vision model.
+- If the render and the data disagree, **the data wins**.
 
-- **Geometría / medidas / reglas** → `inspect_drawing`, `query_entities`,
-  `find_text` (datos exactos) y `check.py`. Es la verdad.
-- **Estética / legibilidad / "se ve bien"** → `render` (PNG) + modelo de visión.
-- Si el render y los datos no coinciden, **mandan los datos**.
+## Normative rules
 
-## Normativa
+The rules are in `caba_rules.json`. They are **starting values**, not legal
+advice. Before delivery:
 
-Las reglas están en `rules_caba.json`. Son **valores de partida**, no
-asesoramiento legal. Antes de entregar:
+- Verify each value against the current CABA Building Code (Law 6100) and Urban
+  Code (Law 6099), or the project's municipality.
+- If a rule the project needs is missing, **ask**. Do not invent numbers or
+  "approximate" a code requirement.
 
-- Verificar cada valor contra el Código de Edificación de CABA (Ley 6100) y el
-  Código Urbanístico (Ley 6099) vigentes, o la normativa del municipio.
-- Si falta una regla que el proyecto necesita, **preguntar**. No inventar números
-  ni "aproximar" una norma.
+## Project conventions
 
-## Convenciones del proyecto
+- Units: **meters** (1 unit = 1 m). `$INSUNITS = 6`.
+- Layers: `A-WALL`, `A-DOOR`, `A-WIN`, `A-AREA`, `A-ANNO`, `A-DIM`, `A-AXIS`.
+- Rooms: the `A-AREA` polygon carries the name in XDATA (appid `CADAGENT`).
+- Minimum text height: 0.15 m (see `caba_rules.json`).
+- Dimensions in meters, with two decimals.
+- Write documents, comments, and user-facing messages in **English**. Keep CAD
+  layer names, block codes, and JSON keys stable.
 
-- Unidades: **metros** (1 unidad = 1 m). `$INSUNITS = 6`.
-- Capas: `A-WALL`, `A-DOOR`, `A-WIN`, `A-AREA`, `A-ANNO`, `A-DIM`, `A-AXIS`.
-- Ambientes: el polígono `A-AREA` lleva el nombre en XDATA (appid `CADAGENT`).
-- Altura de texto mínima: 0.15 m (ver `rules_caba.json`).
-- Cotas en metros, con dos decimales.
+## CADCraft limits
 
-## CADCraft: límites que tenés que respetar
-
-- Está en desarrollo temprano: **las entidades que no modela se pierden al
-  guardar**. Guardá siempre una copia del original antes de sobrescribir.
-- Al abrir un DWG, revisar `warnings` del MCP `open` y `readNotes` de
+- It is early-stage software: **entities it does not model are lost on save**.
+  Always keep a copy of the original before overwriting.
+- When opening a DWG, check the MCP `open` `warnings` and `readNotes` from
   `cadcraft-cli info`.
-- Después de cada guardado, verificar con `cadcraft-cli info` que el conteo de
-  entidades no bajó.
-- No prometas fidelidad total contra AutoCAD. Validá el round-trip.
+- After every save, verify with `cadcraft-cli info` that the entity count did not
+  drop.
+- Do not promise full AutoCAD fidelity. Validate the round-trip.
 
-## Herramientas disponibles
+## Available tools
 
 - MCP `cadcraft`: `command_line`, `script`, `execute`, `inspect_drawing`,
   `query_entities`, `find_text`, `render`, `open`, `save`, `new_drawing`,
   `cancel`, `list_commands`.
 - CLI: `cadcraft-cli info | convert | run | commands | mcp`.
-- Python: `ezdxf` (lectura/escritura DXF), `matplotlib`.
+- Python: `ezdxf` (DXF read/write), `matplotlib`.
 
-## Qué NO hacer
+## Do not
 
-- No inventar cotas ni superficies.
-- No usar capturas de pantalla como fuente de verdad geométrica.
-- No entregar sin reporte `ok: true`.
-- No firmar ni presentar: el plano lo revisa y firma un profesional matriculado.
+- Invent dimensions or areas.
+- Use screenshots as the source of geometric truth.
+- Deliver without an `ok: true` report.
+- Sign or submit: a licensed professional reviews and signs the plan.

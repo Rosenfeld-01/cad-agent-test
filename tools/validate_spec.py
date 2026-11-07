@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""validate_spec.py — preflight barato del spec antes de generar el DXF.
+"""validate_spec.py — cheap spec preflight before generating the DXF.
 
-Hace dos cosas:
+It does two things:
 
-1. Valida el JSON contra `schemas/spec.schema.json` (estructura y tipos).
-2. Revisa la geometria que `plan.py` y `check.py` van a necesitar: muros con
-   longitud, aberturas dentro del muro y sin solaparse, ambientes con area y
-   lado minimo, ambientes sin solaparse y altura libre.
+1. Validates the JSON against `schemas/spec.schema.json` (structure and types).
+2. Checks the geometry that `plan.py` and `check.py` will need: walls with
+   length, openings inside the wall and not overlapping, rooms with area and
+   minimum side, rooms without overlaps, and clear height.
 
-No reemplaza a `check.py`: `check.py` mide el DXF generado (iluminacion,
-ventilacion, superficies reales). Este script es el portero de entrada, para no
-gastar una generacion en un spec mal formado.
+It does not replace `check.py`: `check.py` measures the generated DXF (lighting,
+ventilation, real areas). This script is the entry gate, so a malformed spec does
+not waste a generation.
 
-Uso:
-    python3 tools/validate_spec.py typologies/semillas/casa_8.66x20.json
-    python3 tools/validate_spec.py casos/<slug>/spec.json --json
-    python3 tools/validate_spec.py spec.json --rules rules_caba.json
+Usage:
+    python3 tools/validate_spec.py typologies/seeds/house_8.66x20.json
+    python3 tools/validate_spec.py cases/<slug>/spec.json --json
+    python3 tools/validate_spec.py spec.json --rules caba_rules.json
 
-Salida: exit 0 si no hay errores; exit 1 si hay al menos un error.
+Output: exit 0 if there are no errors; exit 1 if there is at least one error.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_RULES = ROOT / "rules_caba.json"
+DEFAULT_RULES = ROOT / "caba_rules.json"
 DEFAULT_SCHEMA = ROOT / "schemas" / "spec.schema.json"
 TOL = 1e-6
 
@@ -53,7 +53,7 @@ def load_json(path: Path) -> dict:
 
 
 def check_schema(spec: dict, schema_path: Path) -> list[Finding]:
-    """Valida contra el JSON Schema. Si jsonschema no esta, hace lo minimo."""
+    """Validate against the JSON Schema. If jsonschema is missing, do the minimum."""
     findings: list[Finding] = []
     try:
         from jsonschema import Draft202012Validator
@@ -64,196 +64,196 @@ def check_schema(spec: dict, schema_path: Path) -> list[Finding]:
         schema = load_json(schema_path)
         Draft202012Validator.check_schema(schema)
         validator = Draft202012Validator(schema)
-    except Exception as exc:  # schema roto o archivo ilegible
-        return [Finding("ERROR", "SCHEMA_BROKEN", f"no se pudo cargar el schema: {exc}")]
+    except Exception as exc:  # broken schema or unreadable file
+        return [Finding("ERROR", "SCHEMA_BROKEN", f"could not load schema: {exc}")]
 
     for err in sorted(validator.iter_errors(spec), key=lambda e: list(e.path)):
-        where = "/".join(str(p) for p in err.path) or "(raiz)"
+        where = "/".join(str(p) for p in err.path) or "(root)"
         findings.append(Finding("ERROR", "SCHEMA", err.message, where))
     return findings
 
 
 def _check_schema_fallback(spec: dict) -> list[Finding]:
-    """Chequeo minimo sin dependencias, por si falta jsonschema."""
+    """Minimum check without dependencies, in case jsonschema is missing."""
     findings: list[Finding] = []
-    required = ["unidad", "altura_libre", "muros", "ambientes"]
+    required = ["unit", "clear_height", "walls", "rooms"]
     for key in required:
         if key not in spec:
-            findings.append(Finding("ERROR", "SCHEMA", f"falta '{key}'", "(raiz)"))
-    if spec.get("unidad") != "m":
-        findings.append(Finding("ERROR", "SCHEMA", "unidad debe ser 'm'", "unidad"))
-    if not isinstance(spec.get("muros"), list):
-        findings.append(Finding("ERROR", "SCHEMA", "muros debe ser una lista", "muros"))
-    if not isinstance(spec.get("ambientes"), list):
-        findings.append(Finding("ERROR", "SCHEMA", "ambientes debe ser una lista", "ambientes"))
-    for i, w in enumerate(spec.get("muros", [])):
-        for key in ("p1", "p2", "espesor", "aberturas"):
+            findings.append(Finding("ERROR", "SCHEMA", f"missing '{key}'", "(root)"))
+    if spec.get("unit") != "m":
+        findings.append(Finding("ERROR", "SCHEMA", "unit must be 'm'", "unit"))
+    if not isinstance(spec.get("walls"), list):
+        findings.append(Finding("ERROR", "SCHEMA", "walls must be a list", "walls"))
+    if not isinstance(spec.get("rooms"), list):
+        findings.append(Finding("ERROR", "SCHEMA", "rooms must be a list", "rooms"))
+    for i, w in enumerate(spec.get("walls", [])):
+        for key in ("p1", "p2", "thickness", "openings"):
             if key not in w:
-                findings.append(Finding("ERROR", "SCHEMA", f"muro {i}: falta '{key}'", f"muros/{i}"))
-    for i, a in enumerate(spec.get("ambientes", [])):
-        for key in ("nombre", "tipo", "x", "y", "w", "h"):
-            if key not in a:
-                findings.append(Finding("ERROR", "SCHEMA", f"ambiente {i}: falta '{key}'", f"ambientes/{i}"))
+                findings.append(Finding("ERROR", "SCHEMA", f"wall {i}: missing '{key}'", f"walls/{i}"))
+    for i, room in enumerate(spec.get("rooms", [])):
+        for key in ("name", "type", "x", "y", "w", "h"):
+            if key not in room:
+                findings.append(Finding("ERROR", "SCHEMA", f"room {i}: missing '{key}'", f"rooms/{i}"))
     return findings
 
 
-def _rect(a: dict) -> tuple[float, float, float, float]:
-    x, y = float(a["x"]), float(a["y"])
-    return x, y, x + float(a["w"]), y + float(a["h"])
+def _rect(room: dict) -> tuple[float, float, float, float]:
+    x, y = float(room["x"]), float(room["y"])
+    return x, y, x + float(room["w"]), y + float(room["h"])
 
 
 def check_geometry(spec: dict, rules: dict) -> list[Finding]:
     findings: list[Finding] = []
-    amb_rules = rules.get("ambientes", {})
-    sin_vent = set(rules.get("sin_ventilacion", []))
+    room_rules = rules.get("rooms", {})
+    no_ventilation = set(rules.get("no_ventilation", []))
 
-    # --- altura libre ---
-    alt = float(spec.get("altura_libre", 0.0))
-    if alt + 1e-9 < float(rules.get("altura_libre_min", 0.0)):
+    # --- clear height ---
+    alt = float(spec.get("clear_height", 0.0))
+    if alt + 1e-9 < float(rules.get("min_clear_height", 0.0)):
         findings.append(Finding(
             "ERROR", "CEILING_LOW",
-            f"altura libre {alt:.2f} m < minimo {rules['altura_libre_min']} m",
-            "altura_libre"))
+            f"clear height {alt:.2f} m < minimum {rules['min_clear_height']} m",
+            "clear_height"))
 
-    # --- muros ---
-    for i, w in enumerate(spec.get("muros", [])):
-        wid = w.get("id", f"muro {i}")
-        where = f"muros/{i}"
+    # --- walls ---
+    for i, w in enumerate(spec.get("walls", [])):
+        wid = w.get("id", f"wall {i}")
+        where = f"walls/{i}"
         try:
             x1, y1 = float(w["p1"][0]), float(w["p1"][1])
             x2, y2 = float(w["p2"][0]), float(w["p2"][1])
         except (KeyError, IndexError, TypeError, ValueError):
-            findings.append(Finding("ERROR", "WALL_BAD_POINT", f"{wid}: p1/p2 invalidos", where))
+            findings.append(Finding("ERROR", "WALL_BAD_POINT", f"{wid}: invalid p1/p2", where))
             continue
         length = math.hypot(x2 - x1, y2 - y1)
         if length <= TOL:
-            findings.append(Finding("ERROR", "WALL_ZERO", f"{wid}: longitud 0", where))
+            findings.append(Finding("ERROR", "WALL_ZERO", f"{wid}: zero length", where))
             continue
 
-        tipo = w.get("tipo", "interior")
-        key = "exterior_min" if tipo == "exterior" else "interior_min"
-        t = float(w.get("espesor", 0.0))
-        if t + 1e-9 < float(rules["muros"][key]):
+        wall_type = w.get("type", "interior")
+        key = "exterior_min" if wall_type == "exterior" else "interior_min"
+        t = float(w.get("thickness", 0.0))
+        if t + 1e-9 < float(rules["walls"][key]):
             findings.append(Finding(
                 "ERROR", "WALL_THIN",
-                f"{wid}: {t:.2f} m < minimo {rules['muros'][key]} m ({tipo})",
+                f"{wid}: {t:.2f} m < minimum {rules['walls'][key]} m ({wall_type})",
                 where))
 
-        # aberturas: dentro del muro y sin solaparse
+        # openings: inside the wall and not overlapping
         prev_b = None
-        for o in sorted(w.get("aberturas", []), key=lambda o: float(o.get("s", 0))):
+        for o in sorted(w.get("openings", []), key=lambda o: float(o.get("s", 0))):
             oid = o.get("id", "?")
             try:
                 s = float(o["s"])
-                ancho = float(o["ancho"])
+                width = float(o["width"])
             except (KeyError, TypeError, ValueError):
-                findings.append(Finding("ERROR", "OPENING_BAD", f"{wid}: abertura {oid} invalida", where))
+                findings.append(Finding("ERROR", "OPENING_BAD", f"{wid}: invalid opening {oid}", where))
                 continue
-            a, b = s - ancho / 2, s + ancho / 2
+            a, b = s - width / 2, s + width / 2
             if a < -1e-6 or b > length + 1e-6:
                 findings.append(Finding(
                     "ERROR", "OPENING_OUT_OF_WALL",
-                    f"{wid}: abertura {oid} fuera del muro (a={a:.2f}, b={b:.2f}, L={length:.2f})",
+                    f"{wid}: opening {oid} outside wall (a={a:.2f}, b={b:.2f}, L={length:.2f})",
                     where))
             if prev_b is not None and a < prev_b - 1e-6:
                 findings.append(Finding(
                     "ERROR", "OPENING_OVERLAP",
-                    f"{wid}: abertura {oid} se solapa con la anterior",
+                    f"{wid}: opening {oid} overlaps the previous one",
                     where))
             prev_b = max(prev_b or b, b)
 
-            if o.get("tipo") == "puerta":
-                uso = o.get("uso", "interior")
-                need = float(rules.get("puertas", {}).get(uso, rules.get("puertas", {}).get("interior", 0.8)))
-                if ancho + 1e-9 < need:
+            if o.get("type") == "door":
+                use = o.get("use", "interior")
+                need = float(rules.get("doors", {}).get(use, rules.get("doors", {}).get("interior", 0.8)))
+                if width + 1e-9 < need:
                     findings.append(Finding(
                         "ERROR", "DOOR_NARROW",
-                        f"{wid}: puerta {oid} {ancho:.2f} m < minimo {need} m ({uso})",
+                        f"{wid}: door {oid} {width:.2f} m < minimum {need} m ({use})",
                         where))
 
-            alto = o.get("alto")
-            if alto is not None and float(alto) > alt + 1e-6:
+            height = o.get("height")
+            if height is not None and float(height) > alt + 1e-6:
                 findings.append(Finding(
                     "WARN", "OPENING_TALLER_THAN_WALL",
-                    f"{wid}: abertura {oid} alto {float(alto):.2f} m > altura libre {alt:.2f} m",
+                    f"{wid}: opening {oid} height {float(height):.2f} m > clear height {alt:.2f} m",
                     where))
-            ante = o.get("antepecho")
-            if alto is not None and ante is not None and float(ante) + float(alto) > alt + 1e-6:
+            sill = o.get("sill")
+            if height is not None and sill is not None and float(sill) + float(height) > alt + 1e-6:
                 findings.append(Finding(
                     "WARN", "OPENING_ABOVE_CEILING",
-                    f"{wid}: abertura {oid} antepecho+alto > altura libre",
+                    f"{wid}: opening {oid} sill+height > clear height",
                     where))
 
-    # --- ambientes ---
+    # --- rooms ---
     names: dict[str, int] = {}
-    for i, amb in enumerate(spec.get("ambientes", [])):
-        name = amb.get("nombre", f"ambiente {i}")
-        kind = amb.get("tipo", "")
-        where = f"ambientes/{i}"
+    for i, room in enumerate(spec.get("rooms", [])):
+        name = room.get("name", f"room {i}")
+        kind = room.get("type", "")
+        where = f"rooms/{i}"
         if name in names:
             findings.append(Finding(
                 "ERROR", "ROOM_DUPLICATE",
-                f"nombre de ambiente repetido: {name}",
+                f"duplicate room name: {name}",
                 where))
         names[name] = i
 
         try:
-            w, h = float(amb["w"]), float(amb["h"])
+            w, h = float(room["w"]), float(room["h"])
         except (KeyError, TypeError, ValueError):
-            findings.append(Finding("ERROR", "ROOM_BAD_SIZE", f"{name}: w/h invalidos", where))
+            findings.append(Finding("ERROR", "ROOM_BAD_SIZE", f"{name}: invalid w/h", where))
             continue
         if w <= TOL or h <= TOL:
-            findings.append(Finding("ERROR", "ROOM_ZERO", f"{name}: ancho o alto 0", where))
+            findings.append(Finding("ERROR", "ROOM_ZERO", f"{name}: width or height is 0", where))
             continue
 
-        r = amb_rules.get(kind)
+        r = room_rules.get(kind)
         if r is None:
             findings.append(Finding(
                 "WARN", "ROOM_KIND_UNKNOWN",
-                f"{name}: tipo '{kind}' sin regla en rules_caba.json",
+                f"{name}: type '{kind}' has no rule in caba_rules.json",
                 where))
         else:
             area = w * h
-            if area + 1e-9 < float(r["area_min"]):
+            if area + 1e-9 < float(r["min_area"]):
                 findings.append(Finding(
                     "ERROR", "ROOM_TOO_SMALL",
-                    f"{name}: {area:.2f} m2 < minimo {r['area_min']} m2",
+                    f"{name}: {area:.2f} m2 < minimum {r['min_area']} m2",
                     where))
             side = min(w, h)
-            if side + 1e-9 < float(r["lado_min"]):
+            if side + 1e-9 < float(r["min_side"]):
                 findings.append(Finding(
                     "ERROR", "ROOM_SIDE_TOO_SMALL",
-                    f"{name}: lado {side:.2f} m < minimo {r['lado_min']} m",
+                    f"{name}: side {side:.2f} m < minimum {r['min_side']} m",
                     where))
 
-        # Si el spec declara lote, el ambiente tiene que entrar.
-        lote = spec.get("lote")
-        if isinstance(lote, dict) and lote.get("frente_m") and lote.get("fondo_m"):
-            x, y = float(amb["x"]), float(amb["y"])
+        # If the spec declares a lot, the room must fit inside it.
+        lot = spec.get("lot")
+        if isinstance(lot, dict) and lot.get("front_m") and lot.get("depth_m"):
+            x, y = float(room["x"]), float(room["y"])
             if x < -1e-6 or y < -1e-6:
                 findings.append(Finding(
                     "ERROR", "ROOM_OUT_OF_LOT",
-                    f"{name}: origen ({x:.2f}, {y:.2f}) fuera del lote",
+                    f"{name}: origin ({x:.2f}, {y:.2f}) outside the lot",
                     where))
-            if x + w > float(lote["frente_m"]) + 1e-6:
+            if x + w > float(lot["front_m"]) + 1e-6:
                 findings.append(Finding(
                     "ERROR", "ROOM_OUT_OF_LOT",
-                    f"{name}: x+w={x + w:.2f} > frente {lote['frente_m']}",
+                    f"{name}: x+w={x + w:.2f} > front {lot['front_m']}",
                     where))
-            if y + h > float(lote["fondo_m"]) + 1e-6:
+            if y + h > float(lot["depth_m"]) + 1e-6:
                 findings.append(Finding(
                     "ERROR", "ROOM_OUT_OF_LOT",
-                    f"{name}: y+h={y + h:.2f} > fondo {lote['fondo_m']}",
+                    f"{name}: y+h={y + h:.2f} > depth {lot['depth_m']}",
                     where))
 
-    # --- solapamiento entre ambientes ---
-    ambs = spec.get("ambientes", [])
-    for i, a in enumerate(ambs):
+    # --- room overlap ---
+    rooms = spec.get("rooms", [])
+    for i, a in enumerate(rooms):
         try:
             ax0, ay0, ax1, ay1 = _rect(a)
         except (KeyError, TypeError, ValueError):
             continue
-        for b in ambs[i + 1:]:
+        for b in rooms[i + 1:]:
             try:
                 bx0, by0, bx1, by1 = _rect(b)
             except (KeyError, TypeError, ValueError):
@@ -263,28 +263,28 @@ def check_geometry(spec: dict, rules: dict) -> list[Finding]:
             if ox > 1e-4 and oy > 1e-4:
                 findings.append(Finding(
                     "ERROR", "ROOM_OVERLAP",
-                    f"{a.get('nombre', '?')} y {b.get('nombre', '?')} se solapan {ox:.2f}x{oy:.2f} m",
-                    f"ambientes/{i}"))
+                    f"{a.get('name', '?')} and {b.get('name', '?')} overlap {ox:.2f}x{oy:.2f} m",
+                    f"rooms/{i}"))
     return findings
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Preflight de un spec de vivienda.")
-    ap.add_argument("spec", type=Path, help="spec JSON a validar")
-    ap.add_argument("--rules", type=Path, default=DEFAULT_RULES, help="reglas CABA")
+    ap = argparse.ArgumentParser(description="Preflight a housing spec.")
+    ap.add_argument("spec", type=Path, help="spec JSON to validate")
+    ap.add_argument("--rules", type=Path, default=DEFAULT_RULES, help="CABA rules")
     ap.add_argument("--schema", type=Path, default=DEFAULT_SCHEMA, help="JSON Schema")
-    ap.add_argument("--json", action="store_true", help="salida JSON")
+    ap.add_argument("--json", action="store_true", help="JSON output")
     args = ap.parse_args(argv)
 
     try:
         spec = load_json(args.spec)
     except Exception as exc:
-        print(f"ERROR: no se pudo leer {args.spec}: {exc}", file=sys.stderr)
+        print(f"ERROR: could not read {args.spec}: {exc}", file=sys.stderr)
         return 1
     try:
         rules = load_json(args.rules)
     except Exception as exc:
-        print(f"ERROR: no se pudo leer {args.rules}: {exc}", file=sys.stderr)
+        print(f"ERROR: could not read {args.rules}: {exc}", file=sys.stderr)
         return 1
 
     findings = check_schema(spec, args.schema) + check_geometry(spec, rules)
@@ -304,10 +304,10 @@ def main(argv: list[str] | None = None) -> int:
             loc = f" [{f.where}]" if f.where else ""
             print(f"  {f.level:5s} {f.code}: {f.msg}{loc}")
         if not findings:
-            print("  OK    schema y geometria sin hallazgos")
+            print("  OK    schema and geometry have no findings")
         print()
-        print(f"resultado: {'OK' if not errors else 'ERROR'} "
-              f"({len(errors)} errores, {len(warnings)} warnings)")
+        print(f"result: {'OK' if not errors else 'ERROR'} "
+              f"({len(errors)} errors, {len(warnings)} warnings)")
 
     return 1 if errors else 0
 

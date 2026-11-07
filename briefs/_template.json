@@ -1,0 +1,42 @@
+{
+  "slug": "<slug>",
+  "title": "<project title>",
+  "date": "<YYYY-MM-DD>",
+  "typology": "<id from typologies/>",
+  "lot": {
+    "front_m": null,
+    "depth_m": null,
+    "area_m2": null,
+    "party_walls": true,
+    "corner": false
+  },
+  "floors": 1,
+  "program": {
+    "bedrooms": null,
+    "bathrooms": null,
+    "powder_rooms": null,
+    "integrated_kitchen": true,
+    "laundry": true,
+    "storage": true,
+    "garage": false
+  },
+  "target": {
+    "covered_area_m2": [null, null],
+    "clear_height_m": 2.6
+  },
+  "constraints": {
+    "front_setback_m": null,
+    "rear_setback_m": null,
+    "exterior_wall_m": 0.2,
+    "interior_wall_m": 0.1,
+    "min_corridor_m": 1.0,
+    "min_window_factor": 0.2
+  },
+  "result": {
+    "status": "draft",
+    "area_m2": null,
+    "rooms": null,
+    "report": null
+  },
+  "notes": "<what the client asked for, what is reused, what must be verified>"
+}

@@ -1,64 +1,64 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cad-agent.local/schemas/spec.schema.json",
-  "title": "Spec de vivienda (CADCraft)",
-  "description": "Fuente de verdad de un plano de planta. Unidades en metros. El DXF se genera desde este archivo; nunca se edita a mano.",
+  "title": "Housing spec (CADCraft)",
+  "description": "Source of truth for a floor plan. Units are meters. The DXF is generated from this file; never edit it by hand.",
   "type": "object",
-  "required": ["unidad", "altura_libre", "muros", "ambientes"],
+  "required": ["unit", "clear_height", "walls", "rooms"],
   "additionalProperties": true,
   "properties": {
-    "unidad": {
+    "unit": {
       "type": "string",
       "const": "m",
-      "description": "Unidad del spec. Siempre metros."
+      "description": "Spec unit. Always meters."
     },
-    "proyecto": {
+    "project": {
       "type": "string",
-      "description": "Nombre del proyecto (opcional)."
+      "description": "Project name (optional)."
     },
-    "planta": {
+    "floor": {
       "type": "string",
-      "description": "Nombre de la planta, por ejemplo 'PLANTA BAJA' (opcional)."
+      "description": "Floor name, for example 'GROUND FLOOR' (optional)."
     },
-    "nivel": {
+    "level": {
       "type": "string",
-      "description": "Nivel de la planta, por ejemplo '+0.00' o '+2.90' (opcional)."
+      "description": "Floor level, for example '+0.00' or '+2.90' (optional)."
     },
-    "altura_libre": {
+    "clear_height": {
       "type": "number",
       "minimum": 2.4,
-      "description": "Altura libre minima del local en metros."
+      "description": "Minimum room clear height in meters."
     },
-    "nota": {
+    "note": {
       "type": "string",
-      "description": "Nota de revision o alcance (opcional)."
+      "description": "Review or scope note (optional)."
     },
-    "lote": {
+    "lot": {
       "type": "object",
-      "description": "Datos del lote (opcional; si esta, validate_spec.py controla que los ambientes entren).",
-      "required": ["frente_m", "fondo_m"],
+      "description": "Lot data (optional; when present, validate_spec.py checks that rooms fit).",
+      "required": ["front_m", "depth_m"],
       "properties": {
-        "frente_m": { "type": "number", "exclusiveMinimum": 0 },
-        "fondo_m": { "type": "number", "exclusiveMinimum": 0 },
-        "superficie_m2": { "type": "number", "exclusiveMinimum": 0 },
-        "medianeras": { "type": "boolean" },
-        "esquina": { "type": "boolean" }
+        "front_m": { "type": "number", "exclusiveMinimum": 0 },
+        "depth_m": { "type": "number", "exclusiveMinimum": 0 },
+        "area_m2": { "type": "number", "exclusiveMinimum": 0 },
+        "party_walls": { "type": "boolean" },
+        "corner": { "type": "boolean" }
       },
       "additionalProperties": true
     },
-    "muros": {
+    "walls": {
       "type": "array",
       "minItems": 4,
-      "items": { "$ref": "#/$defs/muro" }
+      "items": { "$ref": "#/$defs/wall" }
     },
-    "ambientes": {
+    "rooms": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/ambiente" }
+      "items": { "$ref": "#/$defs/room" }
     }
   },
   "$defs": {
-    "punto": {
+    "point": {
       "type": "array",
       "prefixItems": [
         { "type": "number" },
@@ -67,78 +67,78 @@
       "minItems": 2,
       "maxItems": 2
     },
-    "abertura": {
+    "opening": {
       "type": "object",
-      "required": ["tipo", "s", "ancho"],
+      "required": ["type", "s", "width"],
       "additionalProperties": true,
       "properties": {
         "id": { "type": "string" },
-        "tipo": {
+        "type": {
           "type": "string",
-          "enum": ["puerta", "ventana", "hueco"]
+          "enum": ["door", "window", "opening"]
         },
-        "uso": {
+        "use": {
           "type": "string",
-          "description": "Uso de la puerta: entrada, interior, bano, etc."
+          "description": "Door use: entrance, interior, bathroom, etc."
         },
         "s": {
           "type": "number",
           "minimum": 0,
-          "description": "Distancia desde p1 al centro de la abertura, en metros."
+          "description": "Distance from p1 to the opening center, in meters."
         },
-        "ancho": {
+        "width": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "Ancho de la abertura en metros."
+          "description": "Opening width in meters."
         },
-        "alto": {
+        "height": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "Alto de la abertura en metros (opcional)."
+          "description": "Opening height in meters (optional)."
         },
-        "antepecho": {
+        "sill": {
           "type": "number",
           "minimum": 0,
-          "description": "Altura del antepecho en metros (opcional)."
+          "description": "Sill height in meters (optional)."
         }
       }
     },
-    "muro": {
+    "wall": {
       "type": "object",
-      "required": ["p1", "p2", "espesor", "aberturas"],
+      "required": ["p1", "p2", "thickness", "openings"],
       "additionalProperties": true,
       "properties": {
         "id": { "type": "string" },
-        "tipo": {
+        "type": {
           "type": "string",
           "enum": ["exterior", "interior"]
         },
-        "espesor": {
+        "thickness": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "Espesor del muro en metros."
+          "description": "Wall thickness in meters."
         },
-        "p1": { "$ref": "#/$defs/punto" },
-        "p2": { "$ref": "#/$defs/punto" },
-        "aberturas": {
+        "p1": { "$ref": "#/$defs/point" },
+        "p2": { "$ref": "#/$defs/point" },
+        "openings": {
           "type": "array",
-          "items": { "$ref": "#/$defs/abertura" }
+          "items": { "$ref": "#/$defs/opening" }
         }
       }
     },
-    "ambiente": {
+    "room": {
       "type": "object",
-      "required": ["nombre", "tipo", "x", "y", "w", "h"],
+      "required": ["name", "type", "x", "y", "w", "h"],
       "additionalProperties": true,
       "properties": {
-        "nombre": {
+        "name": {
           "type": "string",
           "minLength": 1
         },
-        "tipo": {
+        "type": {
           "type": "string",
           "minLength": 1,
-          "description": "Tipo de ambiente; debe existir en rules_caba.json (living, dormitorio, bano, etc.)."
+          "description": "Room type; must exist in caba_rules.json (living, bedroom, bathroom, etc.)."
         },
         "x": { "type": "number" },
         "y": { "type": "number" },

@@ -1,0 +1,46 @@
+{
+  "jurisdiction": "CABA (Argentina)",
+  "source": "CABA Building Code (Law 6100, consolidated text Law 6438). Arts. 3.3.1.2.1 (height), 3.8.9.1 and 3.8.1.1.1 (areas and sides), 3.8.1.1.3 (lighting and ventilation).",
+  "disclaimer": "STARTING NORMATIVE VALUES, NOT LEGAL ADVICE. Verify against the current text and the project municipality's rules. The validator applies only the rules written here.",
+  "review": [
+    "min_clear_height: the code sets 2.40 m; confirm whether the project requires 2.60 m for comfort or another rule",
+    "rooms.kitchen: the code refers to art. 3.3.1.6.5; the value here is conservative",
+    "doors.interior: 0.80 m is practice and accessibility; the code requires 0.80 m clear only for type II bathrooms",
+    "walls: thicknesses are construction practice, not a normative minimum",
+    "FOS/FOT/setbacks: NOT in this file; they depend on the Urban Code and the parcel"
+  ],
+  "min_clear_height": 2.40,
+  "rooms": {
+    "living":                        { "min_area": 9.00,  "min_side": 2.80, "class": "1st" },
+    "living_dining_bedroom":         { "min_area": 15.00, "min_side": 2.80 },
+    "living_dining_bedroom_kitchen": { "min_area": 18.00, "min_side": 2.80 },
+    "bedroom":                       { "min_area": 7.50,  "min_side": 2.50, "class": "3rd" },
+    "office":                        { "min_area": 6.00,  "min_side": 2.20, "note": "private office/study; practice value, not normative" },
+    "kitchen":                       { "min_area": 3.00,  "min_side": 1.50, "note": "integrated cooking space: 3 m2 extra and 0.80 m passage; see art. 3.3.1.6.5" },
+    "bathroom":                      { "min_area": 2.50,  "min_side": 1.50, "note": "type II bathroom, 0.80 m clear door" },
+    "bathroom_3":                    { "min_area": 1.40,  "min_side": 0.90 },
+    "bathroom_4":                    { "min_area": 1.20,  "min_side": 0.90 },
+    "corridor":                      { "min_area": 0.00,  "min_side": 1.00, "note": "0.95 m on lots with frontage <= 8.66 m" },
+    "laundry":                       { "min_area": 1.50,  "min_side": 1.20 },
+    "storage":                       { "min_area": 1.00,  "min_side": 0.60 }
+  },
+  "doors": {
+    "entrance": 0.80,
+    "interior": 0.80,
+    "bathroom": 0.80
+  },
+  "walls": {
+    "exterior_min": 0.15,
+    "interior_min": 0.08
+  },
+  "circulation": {
+    "min_width": 1.00,
+    "min_width_narrow_lot": 0.95,
+    "narrow_lot_m": 8.66,
+    "min_opening": 0.85
+  },
+  "lighting": { "factor": 0.20 },
+  "ventilation": { "factor": 0.05 },
+  "no_ventilation": ["corridor", "storage"],
+  "text": { "min_height": 0.15 }
+}
