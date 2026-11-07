@@ -1,0 +1,32 @@
+# Salidas generadas (no se versionan)
+out/
+casos/*/out/
+
+# Reportes y temporales de pipeline
+*.report.json
+*.log
+*.tmp
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# CAD intermedio / exportaciones pesadas
+*.dwg
+*.pdf
+*.png
+!CAD_Blocks/*.png
+!docs/**/*.png
+
+# Redirecciones basura accidentales (nombre = comando que las creó)
+ezdxf,glob
+traceback
+json
+
+# Sistema operativo / editor
+.DS_Store
+Thumbs.db
+*.swp

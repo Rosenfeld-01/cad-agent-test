@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cad-agent.local/schemas/spec.schema.json",
+  "title": "Spec de vivienda (CADCraft)",
+  "description": "Fuente de verdad de un plano de planta. Unidades en metros. El DXF se genera desde este archivo; nunca se edita a mano.",
+  "type": "object",
+  "required": ["unidad", "altura_libre", "muros", "ambientes"],
+  "additionalProperties": true,
+  "properties": {
+    "unidad": {
+      "type": "string",
+      "const": "m",
+      "description": "Unidad del spec. Siempre metros."
+    },
+    "proyecto": {
+      "type": "string",
+      "description": "Nombre del proyecto (opcional)."
+    },
+    "planta": {
+      "type": "string",
+      "description": "Nombre de la planta, por ejemplo 'PLANTA BAJA' (opcional)."
+    },
+    "nivel": {
+      "type": "string",
+      "description": "Nivel de la planta, por ejemplo '+0.00' o '+2.90' (opcional)."
+    },
+    "altura_libre": {
+      "type": "number",
+      "minimum": 2.4,
+      "description": "Altura libre minima del local en metros."
+    },
+    "nota": {
+      "type": "string",
+      "description": "Nota de revision o alcance (opcional)."
+    },
+    "lote": {
+      "type": "object",
+      "description": "Datos del lote (opcional; si esta, validate_spec.py controla que los ambientes entren).",
+      "required": ["frente_m", "fondo_m"],
+      "properties": {
+        "frente_m": { "type": "number", "exclusiveMinimum": 0 },
+        "fondo_m": { "type": "number", "exclusiveMinimum": 0 },
+        "superficie_m2": { "type": "number", "exclusiveMinimum": 0 },
+        "medianeras": { "type": "boolean" },
+        "esquina": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "muros": {
+      "type": "array",
+      "minItems": 4,
+      "items": { "$ref": "#/$defs/muro" }
+    },
+    "ambientes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/ambiente" }
+    }
+  },
+  "$defs": {
+    "punto": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "number" },
+        { "type": "number" }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "abertura": {
+      "type": "object",
+      "required": ["tipo", "s", "ancho"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string" },
+        "tipo": {
+          "type": "string",
+          "enum": ["puerta", "ventana", "hueco"]
+        },
+        "uso": {
+          "type": "string",
+          "description": "Uso de la puerta: entrada, interior, bano, etc."
+        },
+        "s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Distancia desde p1 al centro de la abertura, en metros."
+        },
+        "ancho": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Ancho de la abertura en metros."
+        },
+        "alto": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Alto de la abertura en metros (opcional)."
+        },
+        "antepecho": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Altura del antepecho en metros (opcional)."
+        }
+      }
+    },
+    "muro": {
+      "type": "object",
+      "required": ["p1", "p2", "espesor", "aberturas"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string" },
+        "tipo": {
+          "type": "string",
+          "enum": ["exterior", "interior"]
+        },
+        "espesor": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Espesor del muro en metros."
+        },
+        "p1": { "$ref": "#/$defs/punto" },
+        "p2": { "$ref": "#/$defs/punto" },
+        "aberturas": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/abertura" }
+        }
+      }
+    },
+    "ambiente": {
+      "type": "object",
+      "required": ["nombre", "tipo", "x", "y", "w", "h"],
+      "additionalProperties": true,
+      "properties": {
+        "nombre": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tipo": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Tipo de ambiente; debe existir en rules_caba.json (living, dormitorio, bano, etc.)."
+        },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "w": { "type": "number", "exclusiveMinimum": 0 },
+        "h": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}

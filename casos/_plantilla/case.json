@@ -1,0 +1,22 @@
+{
+  "slug": "<slug>",
+  "version": 1,
+  "titulo": "<titulo del proyecto>",
+  "fecha": "<YYYY-MM-DD>",
+  "estado": "borrador",
+  "nivel": 1,
+  "tipologia": "<id de typologies/>",
+  "brief": "casos/<slug>/brief.json",
+  "specs": ["casos/<slug>/spec.json"],
+  "salidas": {
+    "dxf": "out/<slug>/spec.dxf",
+    "reporte": "out/<slug>/spec.report.json"
+  },
+  "metricas": {
+    "superficie_m2": null,
+    "ambientes": null,
+    "reporte_ok": false
+  },
+  "lecciones": "casos/<slug>/decisiones.md",
+  "tags": []
+}

@@ -1,0 +1,42 @@
+{
+  "slug": "<slug>",
+  "titulo": "<titulo del proyecto>",
+  "fecha": "<YYYY-MM-DD>",
+  "tipologia": "<id de typologies/>",
+  "lote": {
+    "frente_m": null,
+    "fondo_m": null,
+    "superficie_m2": null,
+    "medianeras": true,
+    "esquina": false
+  },
+  "plantas": 1,
+  "programa": {
+    "dormitorios": null,
+    "banos": null,
+    "toilettes": null,
+    "cocina_integrada": true,
+    "lavadero": true,
+    "guardado": true,
+    "cochera": false
+  },
+  "objetivo": {
+    "superficie_cubierta_m2": [null, null],
+    "altura_libre_m": 2.6
+  },
+  "restricciones": {
+    "retiro_frente_m": null,
+    "retiro_fondo_m": null,
+    "muro_exterior_m": 0.2,
+    "muro_interior_m": 0.1,
+    "pasillo_min_m": 1.0,
+    "ventana_factor_min": 0.2
+  },
+  "resultado": {
+    "estado": "borrador",
+    "superficie_m2": null,
+    "ambientes": null,
+    "reporte": null
+  },
+  "notas": "<que pidio el cliente, que se reutiliza, que hay que verificar>"
+}

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "cadcraft": {
+      "command": "/home/joaquin/.local/bin/cadcraft-cli",
+      "args": ["mcp"],
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
