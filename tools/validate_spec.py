@@ -13,8 +13,8 @@ ventilacion, superficies reales). Este script es el portero de entrada, para no
 gastar una generacion en un spec mal formado.
 
 Uso:
-    python3 tools/validate_spec.py spec_vivienda01.json
-    python3 tools/validate_spec.py casos/vivienda-03/spec.json --json
+    python3 tools/validate_spec.py typologies/semillas/casa_8.66x20.json
+    python3 tools/validate_spec.py casos/<slug>/spec.json --json
     python3 tools/validate_spec.py spec.json --rules rules_caba.json
 
 Salida: exit 0 si no hay errores; exit 1 si hay al menos un error.

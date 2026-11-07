@@ -66,6 +66,7 @@ python3 tools/validate_spec.py casos/<slug>/spec.json
 | `briefs/` | Entradas de proyecto (`_plantilla/brief.json`). |
 | `casos/` | Proyectos concretos: spec, decisiones y métricas. |
 | `planos_lib.py` | Primitivas de lámina (marco, escalas, bloques) para Nivel 2. |
+| `blocks_*.py` | Datos y builder de la biblioteca `CAD_Blocks/` (los usa `planos_lib`). |
 | `examples/nivel2/` | Ejemplo autocontenido del juego de láminas. |
 | `CAD_Blocks/` | Biblioteca de bloques cadastrados (mobiliario, artefactos, instalaciones). |
 | `tests/` | Autotest de gates (`mk_dxf_roto.py` + `test_gates.sh`). |

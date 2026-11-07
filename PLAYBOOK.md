@@ -111,10 +111,11 @@ lectura y lo va a leer muchas veces. Este índice alcanza para casi todo:
 | 926 | `escalera_corte` | escalera vista en corte |
 
 **Otros**: `plan.py` (una sola planta desde spec, pipeline viejo), `check.py`
-(validador del spec), `rules_caba.json`, `spec_vivienda02_pb.json` /
-`spec_vivienda02_pa.json` (los dos specs que alimentan L01/L02), `CAD_Blocks/`
-(97 bloques 1:1 en metros, incluye la familia Modena), `tools/qa_laminas.py`
-(gate de láminas) y `tools/qa_muros.py` (gate de solape de muros A-WALL).
+(validador del spec), `rules_caba.json`, `examples/nivel2/spec_pb.json` /
+`examples/nivel2/spec_pa.json` (los dos specs que alimentan L01/L02),
+`CAD_Blocks/` (97 bloques 1:1 en metros, incluye la familia Modena),
+`tools/qa_laminas.py` (gate de láminas) y `tools/qa_muros.py` (gate de solape de
+muros A-WALL).
 
 **Muros**: `plan.wall_outline()` dibuja la unión de los sólidos de muro (una
 frontera, sin rectángulos interiores); lo usan `plan.build()` y
@@ -124,7 +125,7 @@ frontera, sin rectángulos interiores); lo usan `plan.build()` y
 ## 3. Comandos (los únicos que hacen falta)
 
 ```bash
-cd ~/proyectos/cad-agent
+cd ~/proyectos/cad-agent-test/examples/nivel2
 
 # construir todo (o sólo algunas hojas: mucho más rápido para iterar)
 python3 planos.py
@@ -132,25 +133,25 @@ python3 planos.py L06 L07
 
 # validar el spec de una planta: plan.py dibuja en metros reales y check.py
 # mide sobre ESE dxf (no sirve sobre las láminas, que están en metros de papel)
-python3 plan.py spec_vivienda02_pb.json /tmp/pb02.dxf
-python3 check.py /tmp/pb02.dxf spec_vivienda02_pb.json
-python3 plan.py spec_vivienda02_pa.json /tmp/pa02.dxf
-python3 check.py /tmp/pa02.dxf spec_vivienda02_pa.json
+python3 ../../plan.py spec_pb.json /tmp/pb.dxf
+python3 ../../check.py /tmp/pb.dxf spec_pb.json
+python3 ../../plan.py spec_pa.json /tmp/pa.dxf
+python3 ../../check.py /tmp/pa.dxf spec_pa.json
 
 # GATE de láminas: solapes de texto, fuera de hoja, auditoría DXF
-python3 tools/qa_laminas.py out/L06.dxf
-python3 tools/qa_laminas.py --all out --json out/_qa.json
-python3 tools/qa_laminas.py --all out --verbose
+python3 ../../tools/qa_laminas.py out/L06.dxf
+python3 ../../tools/qa_laminas.py --all out --json out/_qa.json
+python3 ../../tools/qa_laminas.py --all out --verbose
 
 # GATE de muros (solape de muros A-WALL): sólo plantas L01/L02/L03
-python3 tools/qa_muros.py out/L01.dxf out/L02.dxf out/L03.dxf
+python3 ../../tools/qa_muros.py out/L01.dxf out/L02.dxf out/L03.dxf
 
 # PNG para revisar a ojo (13 hojas ~ 27 s)
 for f in out/L*.dxf; do cadcraft-cli convert "$f" "${f%.dxf}.png"; done
 ```
 
 **Regla**: `planos.py` y `check.py` devuelven exit 1 si algo falló. Un `status=0`
-encadenado (`python3 planos.py && python3 tools/qa_laminas.py --all out`) es la
+encadenado (`python3 examples/nivel2/planos.py && python3 tools/qa_laminas.py --all examples/nivel2/out`) es la
 definición de "entrega cerrada".
 
 ## 4. Convenciones duras (no negociar)

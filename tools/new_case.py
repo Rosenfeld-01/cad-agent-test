@@ -5,11 +5,11 @@ Copia el/los spec(s) semilla, escribe el brief y deja un `decisiones.md` inicial
 No inventa el diseno: el agente adapta el spec al brief y corre el validador.
 
 Uso:
-    python3 tools/new_case.py --brief briefs/vivienda_03.json
-    python3 tools/new_case.py --brief briefs/vivienda_03.json \
+    python3 tools/new_case.py --brief briefs/<slug>.json
+    python3 tools/new_case.py --brief briefs/<slug>.json \
         --typology typologies/casa_entre_medianeras_8.66x20.json \
-        --slug vivienda-03
-    python3 tools/new_case.py --brief briefs/x.json --from-case vivienda-01
+        --slug <slug>
+    python3 tools/new_case.py --brief briefs/x.json --from-case <seed>
 
 Salida: crea `casos/<slug>/` y muestra los comandos siguientes.
 """
